@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { LogTable } from './log-table'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { AIConfig } from '@/components/ai-config'
 import { Loader2 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
@@ -15,19 +16,36 @@ export default function Home() {
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [aiApiKey, setAiApiKey] = useState('')
+  const [mounted, setMounted] = useState(false)
   const { theme } = useTheme()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!file) {
-      setError('Please select a ZIP file')
+      setError('Please select an archive file')
+      return
+    }
+    
+    // Validate file type
+    const supportedTypes = ['.zip', '.tar.gz', '.tgz']
+    const isSupported = supportedTypes.some(type => 
+      file.name.toLowerCase().endsWith(type)
+    )
+    
+    if (!isSupported) {
+      setError('Please select a .zip, .tar.gz, or .tgz file')
       return
     }
     setLoading(true)
     setError('')
     try {
       const formData = new FormData()
-      formData.append('zipFile', file)
+      formData.append('archiveFile', file)
       formData.append('days', days.toString())
 
       const response = await fetch('/api/extract-logs', {
@@ -57,23 +75,30 @@ export default function Home() {
     setError('')
   }
 
+  if (!mounted) {
+    return null
+  }
+
   return (
     <main className={`min-h-screen ${theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-gray-100 text-gray-900' : 'bg-gradient-to-br from-gray-900 to-gray-800 text-white'}`}>
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Log Extractor</h1>
-          <ThemeToggle />
+          <div className="flex items-center space-x-2">
+            <AIConfig onApiKeyChange={setAiApiKey} />
+            <ThemeToggle />
+          </div>
         </div>
         <Card className={theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}>
           <CardHeader>
             <CardTitle className={`text-2xl ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}>Extract Logs</CardTitle>
-            <CardDescription className={theme === 'light' ? 'text-gray-600' : 'text-gray-400'}>Upload a ZIP file and specify the number of days to look back</CardDescription>
+            <CardDescription className={theme === 'light' ? 'text-gray-600' : 'text-gray-400'}>Upload an archive file (.zip, .tar.gz, .tgz) and specify the number of days to look back</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label htmlFor="zipFile" className={`text-sm font-medium ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
-                  ZIP File
+                  Archive File (.zip, .tar.gz, .tgz)
                 </label>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -89,7 +114,7 @@ export default function Home() {
                   <Input
                     id="zipFile"
                     type="file"
-                    accept=".zip"
+                    accept=".zip,.tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
                     onChange={(e) => setFile(e.target.files?.[0] || null)}
                     required
                     className="hidden"
@@ -134,7 +159,7 @@ export default function Home() {
             {error && <p className="text-red-500 mt-4">{error}</p>}
           </CardContent>
         </Card>
-        {logs.length > 0 && <LogTable logs={logs} />}
+        {logs.length > 0 && <LogTable logs={logs} aiApiKey={aiApiKey} />}
       </div>
     </main>
   )

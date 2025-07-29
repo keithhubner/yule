@@ -11,7 +11,7 @@ import { CopyButton } from "@/components/ui/copy-button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Brain, Loader2 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
@@ -26,6 +26,7 @@ interface Log {
 
 interface LogTableProps {
   logs: Log[]
+  aiApiKey: string
 }
 
 interface FolderSummary {
@@ -43,7 +44,7 @@ interface DailySummary {
 const MAX_PREVIEW_LINES = 3;
 const LOGS_PER_PAGE = 20;
 
-export function LogTable({ logs }: LogTableProps) {
+export function LogTable({ logs, aiApiKey }: LogTableProps) {
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
   const [typeFilter, setTypeFilter] = useState('all')
   const [expandedLogs, setExpandedLogs] = useState<number[]>([])
@@ -54,19 +55,17 @@ export function LogTable({ logs }: LogTableProps) {
   const [page, setPage] = useState(1)
   const loaderRef = useRef(null)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-
-  const getLastPathSegment = (path: string) => {
-    const segments = path.split('/');
-    return segments[segments.length - 1];
-  };
+  const [aiAnalysis, setAiAnalysis] = useState<{ [key: number]: string }>({})
+  const [loadingAnalysis, setLoadingAnalysis] = useState<{ [key: number]: boolean }>({})
+  const [showAnalysis, setShowAnalysis] = useState<{ [key: number]: boolean }>({})
 
   const uniqueFolders = useMemo(() => {
-    return Array.from(new Set(logs.map(log => getLastPathSegment(log.folder))))
+    return Array.from(new Set(logs.map(log => log.folder)))
   }, [logs])
 
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
-      const matchesFolder = selectedFolders.length === 0 || selectedFolders.includes(getLastPathSegment(log.folder))
+      const matchesFolder = selectedFolders.length === 0 || selectedFolders.includes(log.folder)
       const matchesType = typeFilter === 'all' || 
         (typeFilter === 'error' && log.content.toLowerCase().includes('error')) ||
         (typeFilter === 'warning' && log.content.toLowerCase().includes('warn'))
@@ -77,7 +76,7 @@ export function LogTable({ logs }: LogTableProps) {
 
   const folderSummaries = useMemo(() => {
     const summaries: FolderSummary[] = uniqueFolders.map(folderName => {
-      const folderLogs = filteredLogs.filter(log => getLastPathSegment(log.folder) === folderName)
+      const folderLogs = logs.filter(log => log.folder === folderName)
       return {
         folderName,
         errors: folderLogs.filter(log => log.content.toLowerCase().includes('error')).length,
@@ -85,7 +84,7 @@ export function LogTable({ logs }: LogTableProps) {
       }
     })
     return summaries
-  }, [filteredLogs, uniqueFolders])
+  }, [logs, uniqueFolders])
 
   const dailySummaries = useMemo(() => {
     const summaries: { [key: string]: DailySummary } = {};
@@ -120,6 +119,46 @@ export function LogTable({ logs }: LogTableProps) {
         ? prev.filter(i => i !== index)
         : [...prev, index]
     )
+  }
+
+  const handleAiAnalysis = async (index: number, content: string) => {
+    if (!aiApiKey) {
+      alert('Please configure your OpenAI API key first.')
+      return
+    }
+
+    setLoadingAnalysis(prev => ({ ...prev, [index]: true }))
+    
+    try {
+      const response = await fetch('/api/analyze-error', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          errorContent: content,
+          apiKey: aiApiKey,
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze error')
+      }
+
+      setAiAnalysis(prev => ({ ...prev, [index]: data.analysis }))
+      setShowAnalysis(prev => ({ ...prev, [index]: true }))
+    } catch (error) {
+      console.error('AI analysis error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to analyze error')
+    } finally {
+      setLoadingAnalysis(prev => ({ ...prev, [index]: false }))
+    }
+  }
+
+  const toggleAnalysis = (index: number) => {
+    setShowAnalysis(prev => ({ ...prev, [index]: !prev[index] }))
   }
 
   const renderLogContent = (content: string, index: number) => {
@@ -223,12 +262,12 @@ export function LogTable({ logs }: LogTableProps) {
           <CardTitle className={`text-xl ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}>Folder Summary (Click to filter)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {folderSummaries.map((summary) => (
               <Button
                 key={summary.folderName}
                 variant={selectedFolders.includes(summary.folderName) ? "default" : "outline"}
-                className={`p-4 h-auto flex flex-col items-start ${
+                className={`p-4 h-auto flex flex-col items-start min-h-[80px] ${
                   selectedFolders.includes(summary.folderName) 
                     ? 'bg-blue-500 hover:bg-blue-600 text-white' 
                     : theme === 'light'
@@ -237,15 +276,25 @@ export function LogTable({ logs }: LogTableProps) {
                 }`}
                 onClick={() => toggleFolder(summary.folderName)}
               >
-                <h3 className="font-semibold mb-2 text-left">{summary.folderName}</h3>
-                <p>
-                  <span className={`${theme === 'light' ? 'text-red-600' : 'text-red-400'} font-medium mr-2`}>
+                <h3 className="font-semibold mb-2 text-left text-sm leading-tight break-words w-full" title={summary.folderName}>
+                  {summary.folderName}
+                </h3>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  <span className={`${
+                    selectedFolders.includes(summary.folderName) 
+                      ? 'text-red-200' 
+                      : theme === 'light' ? 'text-red-600' : 'text-red-400'
+                  } font-medium`}>
                     Errors: {summary.errors}
                   </span>
-                  <span className={`${theme === 'light' ? 'text-yellow-600' : 'text-yellow-400'} font-medium`}>
+                  <span className={`${
+                    selectedFolders.includes(summary.folderName) 
+                      ? 'text-yellow-200' 
+                      : theme === 'light' ? 'text-yellow-600' : 'text-yellow-400'
+                  } font-medium`}>
                     Warnings: {summary.warnings}
                   </span>
-                </p>
+                </div>
               </Button>
             ))}
           </div>
@@ -350,46 +399,115 @@ export function LogTable({ logs }: LogTableProps) {
         </Select>
       </div>
 
-      <div className={`rounded-md border mt-8 relative z-0 ${theme === 'light' ? 'border-gray-300' : 'border-gray-700'}`}>
-        <div className="w-full">
-          <Table className="w-full">
+      <div className={`rounded-md border mt-8 relative z-0 overflow-hidden ${theme === 'light' ? 'border-gray-300' : 'border-gray-700'}`}>
+        <div className="w-full overflow-x-auto">
+          <Table className="w-full min-w-[800px]">
             <TableHeader className={`flex ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
               <TableRow className="flex w-full">
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-52`}>Date</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-32`}>Folder</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-32`}>File</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-20`}>Line</TableHead>
-                <TableHead className={`flex-1 ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'}`}>Content</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-20 text-center`}>Actions</TableHead>
+                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-40 sm:w-52`}>Date</TableHead>
+                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-32 sm:w-40`}>Folder</TableHead>
+                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-24 sm:w-32 hidden sm:flex`}>File</TableHead>
+                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-16 sm:w-20`}>Line</TableHead>
+                <TableHead className={`flex-1 ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} min-w-0`}>Content</TableHead>
+                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-20 sm:w-24 text-center`}>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="flex flex-col">
               {visibleLogs.map((log, index) => (
                 <TableRow key={index} className={`flex w-full ${theme === 'light' ? 'even:bg-gray-50' : 'even:bg-gray-800'} hover:bg-gray-100 dark:hover:bg-gray-700`}>
-                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-52`}>
-                    {new Date(log.date).toLocaleString()}
+                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-40 sm:w-52 text-xs sm:text-sm`}>
+                    <div className="truncate">
+                      {new Date(log.date).toLocaleDateString()}
+                      <br className="sm:hidden" />
+                      <span className="text-xs opacity-75 sm:hidden">
+                        {new Date(log.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </span>
+                      <span className="hidden sm:inline">
+                        {' ' + new Date(log.date).toLocaleTimeString()}
+                      </span>
+                    </div>
                   </TableCell>
-                  <TableCell className={`flex-none font-medium ${theme === 'light' ? 'text-gray-900' : 'text-gray-300'} w-32 truncate`}>
-                    {getLastPathSegment(log.folder)}
+                  <TableCell className={`flex-none font-medium ${theme === 'light' ? 'text-gray-900' : 'text-gray-300'} w-32 sm:w-40 truncate text-xs sm:text-sm`}>
+                    <div className="truncate" title={log.folder}>
+                      {log.folder}
+                    </div>
                   </TableCell>
-                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-32 truncate`}>
-                    {getLastPathSegment(log.file)}
+                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-24 sm:w-32 truncate text-xs sm:text-sm hidden sm:flex`}>
+                    <div className="truncate" title={log.file.split('/').pop()}>
+                      {log.file.split('/').pop()}
+                    </div>
                   </TableCell>
-                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-20 text-center`}>
+                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-16 sm:w-20 text-center text-xs sm:text-sm`}>
                     {log.lineNumber}
                   </TableCell>
-                  <TableCell className={`flex-1 ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
-                    {renderLogContent(log.content, index)}
+                  <TableCell className={`flex-1 ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} min-w-0 text-xs sm:text-sm`}>
+                    <div className="min-w-0">
+                      {renderLogContent(log.content, index)}
+                      <div className="sm:hidden mt-1 text-xs opacity-60">
+                        {log.file.split('/').pop()}
+                      </div>
+                    </div>
+                    {showAnalysis[index] && aiAnalysis[index] && (
+                      <div className={`mt-4 p-3 rounded-lg border ${
+                        theme === 'light' 
+                          ? 'bg-purple-50 border-purple-200' 
+                          : 'bg-purple-900/20 border-purple-700'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Brain className="h-4 w-4 text-purple-600" />
+                          <span className={`text-sm font-medium ${
+                            theme === 'light' ? 'text-purple-800' : 'text-purple-300'
+                          }`}>
+                            AI Analysis
+                          </span>
+                        </div>
+                        <div className={`text-sm whitespace-pre-wrap ${
+                          theme === 'light' ? 'text-purple-700' : 'text-purple-200'
+                        }`}>
+                          {aiAnalysis[index]}
+                        </div>
+                      </div>
+                    )}
                   </TableCell>
-                  <TableCell className="flex-none w-20 flex justify-center items-center">
+                  <TableCell className="flex-none w-20 sm:w-24 flex justify-center items-center space-x-1">
                     <CopyButton 
                       value={log.content} 
-                      className={`transition-colors ${
+                      className={`transition-colors text-xs sm:text-sm ${
                         theme === 'light' 
                           ? 'text-gray-600 hover:text-blue-600' 
                           : 'text-white hover:text-blue-400'
                       }`} 
                     />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-6 w-6 sm:h-8 sm:w-8 ${
+                        !aiApiKey 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : loadingAnalysis[index] 
+                            ? 'cursor-not-allowed' 
+                            : aiAnalysis[index] 
+                              ? 'text-green-600 hover:text-green-700' 
+                              : theme === 'light' 
+                                ? 'text-purple-600 hover:text-purple-700' 
+                                : 'text-purple-400 hover:text-purple-300'
+                      }`}
+                      onClick={() => {
+                        if (aiAnalysis[index]) {
+                          toggleAnalysis(index)
+                        } else {
+                          handleAiAnalysis(index, log.content)
+                        }
+                      }}
+                      disabled={!aiApiKey || loadingAnalysis[index]}
+                      title={!aiApiKey ? 'Configure AI first' : aiAnalysis[index] ? 'Toggle AI analysis' : 'Analyze with AI'}
+                    >
+                      {loadingAnalysis[index] ? (
+                        <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                      ) : (
+                        <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
+                      )}
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
