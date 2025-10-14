@@ -6,17 +6,23 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { LogTable } from './log-table'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { AIConfig } from '@/components/ai-config'
 import { Loader2 } from 'lucide-react'
 import { useTheme } from 'next-themes'
+
+interface Log {
+  folder: string
+  file: string
+  lineNumber: number
+  content: string
+  date: Date
+}
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null)
   const [days, setDays] = useState(30)
-  const [logs, setLogs] = useState([])
+  const [logs, setLogs] = useState<Log[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [aiApiKey, setAiApiKey] = useState('')
   const [mounted, setMounted] = useState(false)
   const { theme } = useTheme()
 
@@ -30,15 +36,23 @@ export default function Home() {
       setError('Please select an archive file')
       return
     }
-    
+
     // Validate file type
     const supportedTypes = ['.zip', '.tar.gz', '.tgz']
-    const isSupported = supportedTypes.some(type => 
+    const isSupported = supportedTypes.some(type =>
       file.name.toLowerCase().endsWith(type)
     )
-    
+
     if (!isSupported) {
       setError('Please select a .zip, .tar.gz, or .tgz file')
+      return
+    }
+
+    // Validate file size (default max: 100MB)
+    const maxFileSizeMB = 100
+    const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024
+    if (file.size > maxFileSizeBytes) {
+      setError(`File size exceeds maximum allowed size of ${maxFileSizeMB}MB`)
       return
     }
     setLoading(true)
@@ -85,7 +99,6 @@ export default function Home() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Log Extractor</h1>
           <div className="flex items-center space-x-2">
-            <AIConfig onApiKeyChange={setAiApiKey} />
             <ThemeToggle />
           </div>
         </div>
@@ -159,7 +172,7 @@ export default function Home() {
             {error && <p className="text-red-500 mt-4">{error}</p>}
           </CardContent>
         </Card>
-        {logs.length > 0 && <LogTable logs={logs} aiApiKey={aiApiKey} />}
+        {logs.length > 0 && <LogTable logs={logs} />}
       </div>
     </main>
   )

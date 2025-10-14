@@ -10,15 +10,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  // Validate file size (default max: 100MB, configurable via env)
+  const maxFileSizeMB = parseInt(process.env.MAX_FILE_SIZE_MB || '100')
+  const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024
+  if (archiveFile.size > maxFileSizeBytes) {
+    return NextResponse.json({
+      error: `File size exceeds maximum allowed size of ${maxFileSizeMB}MB`
+    }, { status: 413 })
+  }
+
   // Validate file type
   const supportedTypes = ['.zip', '.tar.gz', '.tgz']
-  const isSupported = supportedTypes.some(type => 
+  const isSupported = supportedTypes.some(type =>
     archiveFile.name.toLowerCase().endsWith(type)
   )
-  
+
   if (!isSupported) {
-    return NextResponse.json({ 
-      error: 'Unsupported file type. Please upload a .zip, .tar.gz, or .tgz file.' 
+    return NextResponse.json({
+      error: 'Unsupported file type. Please upload a .zip, .tar.gz, or .tgz file.'
+    }, { status: 400 })
+  }
+
+  // Validate days parameter
+  const maxDaysLookback = parseInt(process.env.MAX_DAYS_LOOKBACK || '365')
+  if (days < 1 || days > maxDaysLookback) {
+    return NextResponse.json({
+      error: `Days must be between 1 and ${maxDaysLookback}`
     }, { status: 400 })
   }
 

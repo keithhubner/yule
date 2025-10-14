@@ -26,7 +26,6 @@ interface Log {
 
 interface LogTableProps {
   logs: Log[]
-  aiApiKey: string
 }
 
 interface FolderSummary {
@@ -44,7 +43,7 @@ interface DailySummary {
 const MAX_PREVIEW_LINES = 3;
 const LOGS_PER_PAGE = 20;
 
-export function LogTable({ logs, aiApiKey }: LogTableProps) {
+export function LogTable({ logs }: LogTableProps) {
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
   const [typeFilter, setTypeFilter] = useState('all')
   const [expandedLogs, setExpandedLogs] = useState<number[]>([])
@@ -63,45 +62,72 @@ export function LogTable({ logs, aiApiKey }: LogTableProps) {
     return Array.from(new Set(logs.map(log => log.folder)))
   }, [logs])
 
+  // Optimize filtering by caching lowercase content checks
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
       const matchesFolder = selectedFolders.length === 0 || selectedFolders.includes(log.folder)
-      const matchesType = typeFilter === 'all' || 
-        (typeFilter === 'error' && log.content.toLowerCase().includes('error')) ||
-        (typeFilter === 'warning' && log.content.toLowerCase().includes('warn'))
+      if (!matchesFolder) return false
+
+      const contentLower = log.content.toLowerCase()
+      const hasError = contentLower.includes('error')
+      const hasWarning = contentLower.includes('warn')
+
+      const matchesType = typeFilter === 'all' ||
+        (typeFilter === 'error' && hasError) ||
+        (typeFilter === 'warning' && hasWarning)
+      if (!matchesType) return false
+
       const matchesDate = !selectedDate || new Date(log.date).toISOString().split('T')[0] === selectedDate
-      return matchesFolder && matchesType && matchesDate
+      return matchesDate
     })
   }, [logs, selectedFolders, typeFilter, selectedDate])
 
+  // Optimize folder summaries by processing each log once
   const folderSummaries = useMemo(() => {
-    const summaries: FolderSummary[] = uniqueFolders.map(folderName => {
-      const folderLogs = logs.filter(log => log.folder === folderName)
-      return {
-        folderName,
-        errors: folderLogs.filter(log => log.content.toLowerCase().includes('error')).length,
-        warnings: folderLogs.filter(log => log.content.toLowerCase().includes('warn')).length,
+    const summaryMap: { [key: string]: FolderSummary } = {}
+
+    logs.forEach(log => {
+      if (!summaryMap[log.folder]) {
+        summaryMap[log.folder] = {
+          folderName: log.folder,
+          errors: 0,
+          warnings: 0,
+        }
+      }
+
+      const contentLower = log.content.toLowerCase()
+      if (contentLower.includes('error')) {
+        summaryMap[log.folder].errors++
+      }
+      if (contentLower.includes('warn')) {
+        summaryMap[log.folder].warnings++
       }
     })
-    return summaries
-  }, [logs, uniqueFolders])
 
+    return Object.values(summaryMap)
+  }, [logs])
+
+  // Optimize daily summaries by processing each log once
   const dailySummaries = useMemo(() => {
-    const summaries: { [key: string]: DailySummary } = {};
+    const summaries: { [key: string]: DailySummary } = {}
+
     filteredLogs.forEach(log => {
-      const date = new Date(log.date).toISOString().split('T')[0];
+      const date = new Date(log.date).toISOString().split('T')[0]
       if (!summaries[date]) {
-        summaries[date] = { date, errors: 0, warnings: 0 };
+        summaries[date] = { date, errors: 0, warnings: 0 }
       }
-      if (log.content.toLowerCase().includes('error')) {
-        summaries[date].errors++;
+
+      const contentLower = log.content.toLowerCase()
+      if (contentLower.includes('error')) {
+        summaries[date].errors++
       }
-      if (log.content.toLowerCase().includes('warn')) {
-        summaries[date].warnings++;
+      if (contentLower.includes('warn')) {
+        summaries[date].warnings++
       }
-    });
-    return Object.values(summaries).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredLogs]);
+    })
+
+    return Object.values(summaries).sort((a, b) => a.date.localeCompare(b.date))
+  }, [filteredLogs])
 
   const toggleFolder = (folderName: string) => {
     setSelectedFolders(prev => 
@@ -122,13 +148,8 @@ export function LogTable({ logs, aiApiKey }: LogTableProps) {
   }
 
   const handleAiAnalysis = async (index: number, content: string) => {
-    if (!aiApiKey) {
-      alert('Please configure your OpenAI API key first.')
-      return
-    }
-
     setLoadingAnalysis(prev => ({ ...prev, [index]: true }))
-    
+
     try {
       const response = await fetch('/api/analyze-error', {
         method: 'POST',
@@ -137,7 +158,6 @@ export function LogTable({ logs, aiApiKey }: LogTableProps) {
         },
         body: JSON.stringify({
           errorContent: content,
-          apiKey: aiApiKey,
         }),
       })
 
@@ -240,7 +260,9 @@ export function LogTable({ logs, aiApiKey }: LogTableProps) {
     return () => window.removeEventListener('resize', updateHeight)
   }, [dailySummaries])
 
-  const handleBarClick = (data: any) => {
+  const handleBarClick = (data: {
+    activePayload?: Array<{ payload: DailySummary }>
+  } | null) => {
     if (data && data.activePayload && data.activePayload.length > 0) {
       const clickedDate = data.activePayload[0].payload.date;
       if (selectedDate === clickedDate) {
@@ -482,15 +504,13 @@ export function LogTable({ logs, aiApiKey }: LogTableProps) {
                       variant="ghost"
                       size="icon"
                       className={`h-6 w-6 sm:h-8 sm:w-8 ${
-                        !aiApiKey 
-                          ? 'opacity-50 cursor-not-allowed' 
-                          : loadingAnalysis[index] 
-                            ? 'cursor-not-allowed' 
-                            : aiAnalysis[index] 
-                              ? 'text-green-600 hover:text-green-700' 
-                              : theme === 'light' 
-                                ? 'text-purple-600 hover:text-purple-700' 
-                                : 'text-purple-400 hover:text-purple-300'
+                        loadingAnalysis[index]
+                          ? 'cursor-not-allowed'
+                          : aiAnalysis[index]
+                            ? 'text-green-600 hover:text-green-700'
+                            : theme === 'light'
+                              ? 'text-purple-600 hover:text-purple-700'
+                              : 'text-purple-400 hover:text-purple-300'
                       }`}
                       onClick={() => {
                         if (aiAnalysis[index]) {
@@ -499,8 +519,8 @@ export function LogTable({ logs, aiApiKey }: LogTableProps) {
                           handleAiAnalysis(index, log.content)
                         }
                       }}
-                      disabled={!aiApiKey || loadingAnalysis[index]}
-                      title={!aiApiKey ? 'Configure AI first' : aiAnalysis[index] ? 'Toggle AI analysis' : 'Analyze with AI'}
+                      disabled={loadingAnalysis[index]}
+                      title={aiAnalysis[index] ? 'Toggle AI analysis' : 'Analyze with AI'}
                     >
                       {loadingAnalysis[index] ? (
                         <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />

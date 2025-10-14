@@ -15,6 +15,30 @@ function isValidDate(date: unknown): date is Date {
   return date instanceof Date && !isNaN(date.getTime());
 }
 
+/**
+ * Sanitize file path to prevent directory traversal attacks
+ * Returns null if path is potentially malicious
+ */
+function sanitizePath(filePath: string): string | null {
+  // Remove any leading slashes
+  let sanitized = filePath.replace(/^\/+/, '');
+
+  // Check for directory traversal attempts
+  if (sanitized.includes('..') || sanitized.includes('~')) {
+    return null;
+  }
+
+  // Normalize the path
+  sanitized = path.normalize(sanitized);
+
+  // Double check after normalization
+  if (sanitized.includes('..') || sanitized.startsWith('/')) {
+    return null;
+  }
+
+  return sanitized;
+}
+
 function normalizeFolderStructure(filePath: string): string {
   // Remove common prefixes and normalize folder names
   const segments = filePath.split('/');
@@ -115,9 +139,16 @@ async function extractFromZip(zipFile: ArrayBuffer, days: number): Promise<LogEn
   await zip.loadAsync(zipFile);
 
   for (const [filename, file] of Object.entries(zip.files)) {
-    if (!file.dir && (filename.endsWith('.log') || filename.endsWith('.txt') || !path.extname(filename))) {
+    // Sanitize the file path
+    const sanitizedPath = sanitizePath(filename);
+    if (!sanitizedPath) {
+      console.warn(`Skipping potentially malicious path: ${filename}`);
+      continue;
+    }
+
+    if (!file.dir && (sanitizedPath.endsWith('.log') || sanitizedPath.endsWith('.txt') || !path.extname(sanitizedPath))) {
       const content = await file.async('string');
-      logs.push(...processLogContent(content, filename, days));
+      logs.push(...processLogContent(content, sanitizedPath, days));
     }
   }
 
@@ -130,19 +161,29 @@ async function extractFromTarGz(tarGzFile: ArrayBuffer, days: number): Promise<L
     const extract = tar.extract();
     
     extract.on('entry', (header, stream, next) => {
-      if (header.type === 'file' && 
-          (header.name.endsWith('.log') || header.name.endsWith('.txt') || !path.extname(header.name))) {
+      // Sanitize the file path
+      const sanitizedPath = sanitizePath(header.name);
+
+      if (!sanitizedPath) {
+        console.warn(`Skipping potentially malicious path: ${header.name}`);
+        stream.on('end', () => next());
+        stream.resume();
+        return;
+      }
+
+      if (header.type === 'file' &&
+          (sanitizedPath.endsWith('.log') || sanitizedPath.endsWith('.txt') || !path.extname(sanitizedPath))) {
         let content = '';
-        
+
         stream.on('data', (chunk) => {
           content += chunk.toString();
         });
-        
+
         stream.on('end', () => {
-          logs.push(...processLogContent(content, header.name, days));
+          logs.push(...processLogContent(content, sanitizedPath, days));
           next();
         });
-        
+
         stream.resume();
       } else {
         stream.on('end', () => next());

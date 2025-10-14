@@ -3,18 +3,28 @@ import OpenAI from 'openai'
 
 export async function POST(request: NextRequest) {
   try {
-    const { errorContent, apiKey } = await request.json()
+    const { errorContent } = await request.json()
 
-    if (!errorContent || !apiKey) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!errorContent) {
+      return NextResponse.json({ error: 'Missing error content' }, { status: 400 })
+    }
+
+    // Use server-side environment variable for API key
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({
+        error: 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.'
+      }, { status: 500 })
     }
 
     const openai = new OpenAI({
       apiKey: apiKey,
     })
 
+    const model = process.env.OPENAI_MODEL || "gpt-3.5-turbo"
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: model,
       messages: [
         {
           role: "system",
