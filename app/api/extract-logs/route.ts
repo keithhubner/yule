@@ -4,10 +4,25 @@ import { extractLogsFromArchive } from '@/utils/logExtractor'
 export async function POST(request: NextRequest) {
   const formData = await request.formData()
   const archiveFile = formData.get('archiveFile') as File
-  const days = parseInt(formData.get('days') as string)
+  const daysStr = formData.get('days') as string
+  const days = parseInt(daysStr)
 
-  if (!archiveFile || !days) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  console.log('Received:', {
+    hasFile: !!archiveFile,
+    fileName: archiveFile?.name,
+    fileSize: archiveFile?.size,
+    daysStr,
+    days
+  })
+
+  if (!archiveFile) {
+    console.log('Error: No archive file')
+    return NextResponse.json({ error: 'Missing archive file' }, { status: 400 })
+  }
+
+  if (isNaN(days) || days < 1) {
+    console.log('Error: Invalid days value')
+    return NextResponse.json({ error: 'Invalid days value' }, { status: 400 })
   }
 
   // Validate file size (default max: 100MB, configurable via env)
@@ -39,15 +54,19 @@ export async function POST(request: NextRequest) {
     }, { status: 400 })
   }
 
+  console.log('Validation passed, extracting logs...')
+
   const arrayBuffer = await archiveFile.arrayBuffer()
+  console.log('ArrayBuffer size:', arrayBuffer.byteLength)
 
   try {
     const logs = await extractLogsFromArchive(arrayBuffer, archiveFile.name, days)
+    console.log('Extraction complete, found', logs.length, 'logs')
     return NextResponse.json({ logs })
   } catch (error) {
     console.error('Error in log extraction:', error)
-    return NextResponse.json({ 
-      error: error instanceof Error ? error.message : 'Failed to extract logs' 
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Failed to extract logs'
     }, { status: 500 })
   }
 }

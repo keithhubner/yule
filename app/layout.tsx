@@ -1,7 +1,7 @@
+import type { Metadata } from 'next'
 import './globals.css'
-import { ThemeProvider } from "@/components/theme-provider"
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Log Extractor',
   description: 'Extract warnings and errors from log files in a ZIP archive',
 }
@@ -12,13 +12,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
-        </ThemeProvider>
+        {children}
       </body>
     </html>
   )
 }
-

@@ -1,13 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { LogTable } from './log-table'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { Loader2 } from 'lucide-react'
-import { useTheme } from 'next-themes'
+import { Loader2, FileText } from 'lucide-react'
 
 interface Log {
   folder: string
@@ -23,12 +21,6 @@ export default function Home() {
   const [logs, setLogs] = useState<Log[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [mounted, setMounted] = useState(false)
-  const { theme } = useTheme()
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,9 +59,12 @@ export default function Home() {
         body: formData,
       })
 
-      if (!response.ok) throw new Error('Failed to extract logs')
-
       const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to extract logs')
+      }
+
       setLogs(data.logs)
     } catch (err) {
       if (err instanceof Error) {
@@ -89,92 +84,81 @@ export default function Home() {
     setError('')
   }
 
-  if (!mounted) {
-    return null
-  }
-
   return (
-    <main className={`min-h-screen ${theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-gray-100 text-gray-900' : 'bg-gradient-to-br from-gray-900 to-gray-800 text-white'}`}>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Log Extractor</h1>
-          <div className="flex items-center space-x-2">
-            <ThemeToggle />
-          </div>
+    <div className="container mx-auto p-4">
+        <div className="flex items-center mb-4">
+          <FileText className="h-6 w-6 mr-2 text-primary" aria-hidden="true" />
+          <h1 className="text-xl font-bold">Log Extractor</h1>
         </div>
-        <Card className={theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}>
-          <CardHeader>
-            <CardTitle className={`text-2xl ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}>Extract Logs</CardTitle>
-            <CardDescription className={theme === 'light' ? 'text-gray-600' : 'text-gray-400'}>Upload an archive file (.zip, .tar.gz, .tgz) and specify the number of days to look back</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label htmlFor="zipFile" className={`text-sm font-medium ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
-                  Archive File (.zip, .tar.gz, .tgz)
-                </label>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    type="button"
-                    onClick={() => document.getElementById('zipFile')?.click()}
-                    className={`${theme === 'light' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-                  >
-                    Choose file
-                  </Button>
-                  <span className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-                    {file ? file.name : 'No file chosen'}
-                  </span>
-                  <Input
-                    id="zipFile"
-                    type="file"
-                    accept=".zip,.tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    required
-                    className="hidden"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="days" className={`text-sm font-medium ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
-                  Days to Look Back
-                </label>
-                <Input
-                  id="days"
-                  type="number"
-                  value={days}
-                  onChange={(e) => setDays(parseInt(e.target.value))}
-                  required
-                  min="1"
-                  className={theme === 'light' ? 'bg-gray-50 border-gray-300 text-gray-900' : 'bg-gray-700 border-gray-600 text-white'}
-                />
-              </div>
-              <div className="flex space-x-2">
-                <Button type="submit" disabled={loading} className={`${theme === 'light' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Extracting...
-                    </>
-                  ) : (
-                    'Extract Logs'
-                  )}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={handleClear} 
-                  className={`${theme === 'light' ? 'border-gray-300 text-blue-600 hover:bg-gray-100' : 'border-gray-600 text-blue-300 hover:bg-gray-700'} hover:text-white`}
-                >
-                  Clear
-                </Button>
-              </div>
-            </form>
-            {error && <p className="text-red-500 mt-4">{error}</p>}
-          </CardContent>
-        </Card>
+
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <h3 className="font-semibold text-red-800">Error</h3>
+            <p className="text-red-600">{error}</p>
+            <button
+              onClick={() => setError('')}
+              className="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="archiveFile">Archive File</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => document.getElementById('archiveFile')?.click()}
+              >
+                Choose file
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {file ? file.name : 'No file chosen'}
+              </span>
+              <input
+                id="archiveFile"
+                type="file"
+                accept=".zip,.tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                className="hidden"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Supported formats: .zip, .tar.gz, .tgz
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="days">Days to Look Back</Label>
+            <Input
+              id="days"
+              type="number"
+              value={days}
+              onChange={(e) => setDays(parseInt(e.target.value))}
+              min="1"
+              max="365"
+            />
+            <p className="text-sm text-muted-foreground">
+              Enter a value between 1 and 365 days
+            </p>
+          </div>
+
+          <Button onClick={handleSubmit} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Extracting...
+              </>
+            ) : (
+              'Extract Logs'
+            )}
+          </Button>
+        </div>
+
         {logs.length > 0 && <LogTable logs={logs} />}
-      </div>
-    </main>
+    </div>
   )
 }
-

@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronUp, Brain, Loader2 } from 'lucide-react'
-import { useTheme } from 'next-themes'
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
 
@@ -47,7 +46,6 @@ export function LogTable({ logs }: LogTableProps) {
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
   const [typeFilter, setTypeFilter] = useState('all')
   const [expandedLogs, setExpandedLogs] = useState<number[]>([])
-  const { theme } = useTheme()
   const chartRef = useRef<HTMLDivElement>(null)
   const [chartHeight, setChartHeight] = useState(400)
   const [visibleLogs, setVisibleLogs] = useState<Log[]>([])
@@ -200,7 +198,7 @@ export function LogTable({ logs }: LogTableProps) {
             variant="ghost"
             size="sm"
             onClick={() => toggleExpand(index)}
-            className={`mt-2 ${theme === 'light' ? 'text-blue-600 hover:text-blue-700' : 'text-blue-400 hover:text-blue-300'}`}
+            className="mt-2 text-primary hover:text-primary/80"
           >
             {isExpanded ? (
               <>
@@ -277,11 +275,11 @@ export function LogTable({ logs }: LogTableProps) {
 
   return (
     <div className="mt-8 space-y-8">
-      <h2 className={`text-2xl font-bold ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}>Extracted Logs</h2>
-      
-      <Card className={`w-full ${theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}`}>
+      <h2 className="text-2xl font-bold text-foreground">Extracted Logs</h2>
+
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle className={`text-xl ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}>Folder Summary (Click to filter)</CardTitle>
+          <CardTitle className="text-xl">Folder Summary (Click to filter)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -289,31 +287,25 @@ export function LogTable({ logs }: LogTableProps) {
               <Button
                 key={summary.folderName}
                 variant={selectedFolders.includes(summary.folderName) ? "default" : "outline"}
-                className={`p-4 h-auto flex flex-col items-start min-h-[80px] ${
-                  selectedFolders.includes(summary.folderName) 
-                    ? 'bg-blue-500 hover:bg-blue-600 text-white' 
-                    : theme === 'light'
-                      ? 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'
-                      : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-gray-200'
-                }`}
+                className="p-4 h-auto flex flex-col items-start min-h-[80px]"
                 onClick={() => toggleFolder(summary.folderName)}
               >
                 <h3 className="font-semibold mb-2 text-left text-sm leading-tight break-words w-full" title={summary.folderName}>
                   {summary.folderName}
                 </h3>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                  <span className={`${
-                    selectedFolders.includes(summary.folderName) 
-                      ? 'text-red-200' 
-                      : theme === 'light' ? 'text-red-600' : 'text-red-400'
-                  } font-medium`}>
+                  <span className={`font-medium ${
+                    selectedFolders.includes(summary.folderName)
+                      ? 'text-red-200'
+                      : 'text-red-500'
+                  }`}>
                     Errors: {summary.errors}
                   </span>
-                  <span className={`${
-                    selectedFolders.includes(summary.folderName) 
-                      ? 'text-yellow-200' 
-                      : theme === 'light' ? 'text-yellow-600' : 'text-yellow-400'
-                  } font-medium`}>
+                  <span className={`font-medium ${
+                    selectedFolders.includes(summary.folderName)
+                      ? 'text-yellow-200'
+                      : 'text-yellow-600'
+                  }`}>
                     Warnings: {summary.warnings}
                   </span>
                 </div>
@@ -323,12 +315,12 @@ export function LogTable({ logs }: LogTableProps) {
         </CardContent>
       </Card>
 
-      <Card className={`w-full mt-4 relative z-10 ${theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}`}>
+      <Card className="w-full mt-4 relative z-10">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className={`text-xl ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}>
+          <CardTitle className="text-xl">
             Daily Error and Warning Summary
             {selectedDate && (
-              <span className="ml-2 text-sm font-normal">
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
                 (Filtered: {new Date(selectedDate).toLocaleDateString()})
               </span>
             )}
@@ -353,43 +345,43 @@ export function LogTable({ logs }: LogTableProps) {
               config={{
                 errors: {
                   label: "Errors",
-                  color: "rgb(248 113 113)", // red-400
+                  color: "hsl(var(--chart-1))",
                 },
                 warnings: {
                   label: "Warnings",
-                  color: "rgb(250 204 21)", // yellow-400
+                  color: "hsl(var(--chart-4))",
                 },
               }}
               className="h-full"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={dailySummaries} 
+                <BarChart
+                  data={dailySummaries}
                   margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
                   onClick={handleBarClick}
                 >
-                  <XAxis 
-                    dataKey="date" 
-                    stroke={theme === 'light' ? '#374151' : '#9CA3AF'}
+                  <XAxis
+                    dataKey="date"
+                    stroke="hsl(var(--muted-foreground))"
                     tickFormatter={(value) => new Date(value).toLocaleDateString()}
                     angle={-45}
                     textAnchor="end"
                     height={60}
                     tickMargin={30}
                   />
-                  <YAxis 
-                    stroke={theme === 'light' ? '#374151' : '#9CA3AF'}
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
                     tickMargin={8}
                   />
-                  <Tooltip 
+                  <Tooltip
                     content={<ChartTooltipContent />}
-                    cursor={{ fill: theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)' }}
+                    cursor={{ fill: 'hsl(var(--accent))' }}
                   />
                   <Bar dataKey="errors" stackId="a" radius={[4, 4, 0, 0]}>
                     {dailySummaries.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={selectedDate === entry.date ? 'rgb(239 68 68)' : 'rgb(248 113 113)'} // red-600 : red-400
+                        fill={selectedDate === entry.date ? 'rgb(239 68 68)' : 'rgb(248 113 113)'}
                       />
                     ))}
                   </Bar>
@@ -397,7 +389,7 @@ export function LogTable({ logs }: LogTableProps) {
                     {dailySummaries.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={selectedDate === entry.date ? 'rgb(202 138 4)' : 'rgb(250 204 21)'} // yellow-600 : yellow-400
+                        fill={selectedDate === entry.date ? 'rgb(202 138 4)' : 'rgb(250 204 21)'}
                       />
                     ))}
                   </Bar>
@@ -410,10 +402,10 @@ export function LogTable({ logs }: LogTableProps) {
 
       <div className="flex justify-end">
         <Select onValueChange={(value) => { setTypeFilter(value); setPage(1); setVisibleLogs([]); }} value={typeFilter}>
-          <SelectTrigger className={`w-[180px] ${theme === 'light' ? 'bg-white border-gray-300 text-gray-900' : 'bg-gray-700 border-gray-600 text-white'}`}>
+          <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filter by type" />
           </SelectTrigger>
-          <SelectContent className={theme === 'light' ? 'bg-white border-gray-300 text-gray-900' : 'bg-gray-700 border-gray-600 text-white'}>
+          <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="error">Errors</SelectItem>
             <SelectItem value="warning">Warnings</SelectItem>
@@ -421,23 +413,23 @@ export function LogTable({ logs }: LogTableProps) {
         </Select>
       </div>
 
-      <div className={`rounded-md border mt-8 relative z-0 overflow-hidden ${theme === 'light' ? 'border-gray-300' : 'border-gray-700'}`}>
+      <div className="rounded-md border border-border mt-8 relative z-0 overflow-hidden">
         <div className="w-full overflow-x-auto">
           <Table className="w-full min-w-[800px]">
-            <TableHeader className={`flex ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
+            <TableHeader className="flex bg-muted">
               <TableRow className="flex w-full">
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-40 sm:w-52`}>Date</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-32 sm:w-40`}>Folder</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-24 sm:w-32 hidden sm:flex`}>File</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-16 sm:w-20`}>Line</TableHead>
-                <TableHead className={`flex-1 ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} min-w-0`}>Content</TableHead>
-                <TableHead className={`flex-none ${theme === 'light' ? 'text-gray-700 font-semibold' : 'text-gray-300'} w-20 sm:w-24 text-center`}>Actions</TableHead>
+                <TableHead className="flex-none font-semibold w-40 sm:w-52">Date</TableHead>
+                <TableHead className="flex-none font-semibold w-32 sm:w-40">Folder</TableHead>
+                <TableHead className="flex-none font-semibold w-24 sm:w-32 hidden sm:flex">File</TableHead>
+                <TableHead className="flex-none font-semibold w-16 sm:w-20">Line</TableHead>
+                <TableHead className="flex-1 font-semibold min-w-0">Content</TableHead>
+                <TableHead className="flex-none font-semibold w-20 sm:w-24 text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="flex flex-col">
               {visibleLogs.map((log, index) => (
-                <TableRow key={index} className={`flex w-full ${theme === 'light' ? 'even:bg-gray-50' : 'even:bg-gray-800'} hover:bg-gray-100 dark:hover:bg-gray-700`}>
-                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-40 sm:w-52 text-xs sm:text-sm`}>
+                <TableRow key={index} className="flex w-full even:bg-muted/50 hover:bg-accent">
+                  <TableCell className="flex-none w-40 sm:w-52 text-xs sm:text-sm">
                     <div className="truncate">
                       {new Date(log.date).toLocaleDateString()}
                       <br className="sm:hidden" />
@@ -449,20 +441,20 @@ export function LogTable({ logs }: LogTableProps) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className={`flex-none font-medium ${theme === 'light' ? 'text-gray-900' : 'text-gray-300'} w-32 sm:w-40 truncate text-xs sm:text-sm`}>
+                  <TableCell className="flex-none font-medium w-32 sm:w-40 truncate text-xs sm:text-sm">
                     <div className="truncate" title={log.folder}>
                       {log.folder}
                     </div>
                   </TableCell>
-                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-24 sm:w-32 truncate text-xs sm:text-sm hidden sm:flex`}>
+                  <TableCell className="flex-none w-24 sm:w-32 truncate text-xs sm:text-sm hidden sm:flex">
                     <div className="truncate" title={log.file.split('/').pop()}>
                       {log.file.split('/').pop()}
                     </div>
                   </TableCell>
-                  <TableCell className={`flex-none ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} w-16 sm:w-20 text-center text-xs sm:text-sm`}>
+                  <TableCell className="flex-none w-16 sm:w-20 text-center text-xs sm:text-sm">
                     {log.lineNumber}
                   </TableCell>
-                  <TableCell className={`flex-1 ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} min-w-0 text-xs sm:text-sm`}>
+                  <TableCell className="flex-1 min-w-0 text-xs sm:text-sm">
                     <div className="min-w-0">
                       {renderLogContent(log.content, index)}
                       <div className="sm:hidden mt-1 text-xs opacity-60">
@@ -470,35 +462,23 @@ export function LogTable({ logs }: LogTableProps) {
                       </div>
                     </div>
                     {showAnalysis[index] && aiAnalysis[index] && (
-                      <div className={`mt-4 p-3 rounded-lg border ${
-                        theme === 'light' 
-                          ? 'bg-purple-50 border-purple-200' 
-                          : 'bg-purple-900/20 border-purple-700'
-                      }`}>
+                      <div className="mt-4 p-3 rounded-lg border bg-secondary border-border">
                         <div className="flex items-center gap-2 mb-2">
-                          <Brain className="h-4 w-4 text-purple-600" />
-                          <span className={`text-sm font-medium ${
-                            theme === 'light' ? 'text-purple-800' : 'text-purple-300'
-                          }`}>
+                          <Brain className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-medium">
                             AI Analysis
                           </span>
                         </div>
-                        <div className={`text-sm whitespace-pre-wrap ${
-                          theme === 'light' ? 'text-purple-700' : 'text-purple-200'
-                        }`}>
+                        <div className="text-sm whitespace-pre-wrap text-muted-foreground">
                           {aiAnalysis[index]}
                         </div>
                       </div>
                     )}
                   </TableCell>
                   <TableCell className="flex-none w-20 sm:w-24 flex justify-center items-center space-x-1">
-                    <CopyButton 
-                      value={log.content} 
-                      className={`transition-colors text-xs sm:text-sm ${
-                        theme === 'light' 
-                          ? 'text-gray-600 hover:text-blue-600' 
-                          : 'text-white hover:text-blue-400'
-                      }`} 
+                    <CopyButton
+                      value={log.content}
+                      className="transition-colors text-xs sm:text-sm text-muted-foreground hover:text-primary"
                     />
                     <Button
                       variant="ghost"
@@ -508,9 +488,7 @@ export function LogTable({ logs }: LogTableProps) {
                           ? 'cursor-not-allowed'
                           : aiAnalysis[index]
                             ? 'text-green-600 hover:text-green-700'
-                            : theme === 'light'
-                              ? 'text-purple-600 hover:text-purple-700'
-                              : 'text-purple-400 hover:text-purple-300'
+                            : 'text-primary hover:text-primary/80'
                       }`}
                       onClick={() => {
                         if (aiAnalysis[index]) {
@@ -535,7 +513,7 @@ export function LogTable({ logs }: LogTableProps) {
           </Table>
           {visibleLogs.length < filteredLogs.length && (
             <div ref={loaderRef} className="flex justify-center items-center p-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           )}
         </div>
