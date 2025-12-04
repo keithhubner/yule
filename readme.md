@@ -123,8 +123,8 @@ You can run Yule directly on your Bitwarden server and mount the logs folder for
 
 ```bash
 docker run -d -p 3000:3000 \
-  -v /opt/bitwarden/bwdata/logs:/logs:ro \
-  -e LOCAL_LOGS_PATH=/logs \
+  -v /opt/bitwarden/bwdata/logs:/opt/bitwarden/bwdata/logs:ro \
+  -e LOCAL_LOGS_PATH=/opt/bitwarden/bwdata/logs \
   --security-opt=no-new-privileges:true \
   --cap-drop=ALL \
   ghcr.io/keithhubner/yule:latest
@@ -134,8 +134,8 @@ docker run -d -p 3000:3000 \
 
 ```powershell
 docker run -d -p 3000:3000 `
-  -v C:\ProgramData\bitwarden\bwdata\logs:/logs:ro `
-  -e LOCAL_LOGS_PATH=/logs `
+  -v C:\ProgramData\bitwarden\bwdata\logs:C:\ProgramData\bitwarden\bwdata\logs:ro `
+  -e LOCAL_LOGS_PATH=C:\ProgramData\bitwarden\bwdata\logs `
   --security-opt=no-new-privileges:true `
   --cap-drop=ALL `
   ghcr.io/keithhubner/yule:latest
@@ -151,14 +151,14 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /opt/bitwarden/bwdata/logs:/logs:ro  # Read-only mount
+      - /opt/bitwarden/bwdata/logs:/opt/bitwarden/bwdata/logs:ro  # Read-only mount
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     environment:
-      - LOCAL_LOGS_PATH=/logs       # Enables Local Logs mode in UI
-      - OPENAI_API_KEY=your-api-key # Optional
+      - LOCAL_LOGS_PATH=/opt/bitwarden/bwdata/logs  # Enables Local Logs mode in UI
+      - OPENAI_API_KEY=your-api-key                 # Optional
 ```
 
 With Local Logs mode enabled, the UI shows two buttons: "Upload Archive" and "Local Logs". In Local Logs mode, you can select specific service folders to analyze and filter by date range - no need to create zip files.
