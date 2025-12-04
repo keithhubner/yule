@@ -5,7 +5,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LogTable } from './log-table'
-import { Loader2, FileText, Search, FolderOpen, Calendar, FileWarning } from 'lucide-react'
+import { Loader2, FileText, Search, FolderOpen, Calendar, FileWarning, HelpCircle } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 interface Log {
   folder: string
@@ -252,7 +260,75 @@ export default function Home() {
 
       <div className="space-y-4">
         <div>
-          <Label htmlFor="archiveFile">Archive File</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="archiveFile">Archive File</Label>
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Help: How to create log archives"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>How to Create Log Archives</DialogTitle>
+                  <DialogDescription>
+                    Instructions for creating log archives from Bitwarden self-hosted installations
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <h3 className="font-semibold mb-2">Linux Server</h3>
+                    <p className="text-muted-foreground mb-2">
+                      Bitwarden logs are typically located in <code className="bg-muted px-1 py-0.5 rounded">/opt/bitwarden/bwdata/logs/</code>
+                    </p>
+                    <div className="bg-muted p-3 rounded-lg font-mono text-xs space-y-2">
+                      <p className="text-muted-foreground"># Navigate to the Bitwarden data directory</p>
+                      <p>cd /opt/bitwarden/bwdata</p>
+                      <p className="text-muted-foreground mt-2"># Create a zip archive of all logs</p>
+                      <p>zip -r bitwarden-logs.zip logs/</p>
+                      <p className="text-muted-foreground mt-2"># Or create a tar.gz archive</p>
+                      <p>tar -czvf bitwarden-logs.tar.gz logs/</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2">Windows Server</h3>
+                    <p className="text-muted-foreground mb-2">
+                      Bitwarden logs are typically located in <code className="bg-muted px-1 py-0.5 rounded">C:\ProgramData\bitwarden\bwdata\logs\</code>
+                    </p>
+                    <div className="bg-muted p-3 rounded-lg font-mono text-xs space-y-2">
+                      <p className="text-muted-foreground"># Using PowerShell:</p>
+                      <p>cd C:\ProgramData\bitwarden\bwdata</p>
+                      <p>Compress-Archive -Path logs -DestinationPath bitwarden-logs.zip</p>
+                      <p className="text-muted-foreground mt-2"># Or using Command Prompt with tar (Windows 10+):</p>
+                      <p>cd C:\ProgramData\bitwarden\bwdata</p>
+                      <p>tar -czvf bitwarden-logs.tar.gz logs</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2">Expected Log Structure</h3>
+                    <p className="text-muted-foreground mb-2">
+                      The tool works best with logs organized in folders by service:
+                    </p>
+                    <div className="bg-muted p-3 rounded-lg font-mono text-xs">
+                      <p>archive.zip</p>
+                      <p className="ml-2">├── service1/</p>
+                      <p className="ml-4">│   ├── service1-2024-01-15.log</p>
+                      <p className="ml-4">│   └── service1-2024-01-16.log</p>
+                      <p className="ml-2">├── service2/</p>
+                      <p className="ml-4">│   └── service2-2024-01-15.log</p>
+                    </div>
+                    <p className="text-muted-foreground mt-2">
+                      Log files should contain timestamps in YYYY-MM-DD format for date filtering.
+                    </p>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
           <div className="flex items-center gap-2 mt-1">
             <Button
               type="button"
