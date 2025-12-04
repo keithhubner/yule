@@ -67,10 +67,6 @@ Thumbs.db
 # Optional eslint cache
 .eslintcache
 
-# Docker
-Dockerfile
-.dockerignore
-
 # Temporary files
 *.tmp
 *.swp

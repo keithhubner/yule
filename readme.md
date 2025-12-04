@@ -71,7 +71,15 @@ This tool was built with a lot of AI assistance and therefore is designed to be 
 ```bash
 docker run -d -p 3000:3000 \
   -e OPENAI_API_KEY=your-api-key \
-  keithhubner/yule:1.0.0
+  ghcr.io/keithhubner/yule:latest
+```
+
+Or use a specific version:
+
+```bash
+docker run -d -p 3000:3000 \
+  -e OPENAI_API_KEY=your-api-key \
+  ghcr.io/keithhubner/yule:v1.0.0
 ```
 
 Then access the tool on http://localhost:3000
