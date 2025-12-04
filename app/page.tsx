@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,6 +46,7 @@ function getDefaultDateRange(): { startDate: string; endDate: string } {
 }
 
 export default function Home() {
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [startDate, setStartDate] = useState<string>(getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState<string>(getDefaultDateRange().endDate)
@@ -84,10 +85,12 @@ export default function Home() {
   }
 
   const handleFileChange = (selectedFile: File | null) => {
+    // Reset all state when file changes
     setFile(selectedFile)
     setAnalysis(null)
     setLogs([])
     setError('')
+    setProgress('')
     // Reset to default date range
     const defaults = getDefaultDateRange()
     setStartDate(defaults.startDate)
@@ -212,14 +215,19 @@ export default function Home() {
   }
 
   const handleClear = () => {
+    // Reset file input element
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+    // Reset all state
     setFile(null)
+    setAnalysis(null)
+    setLogs([])
+    setError('')
+    setProgress('')
     const defaults = getDefaultDateRange()
     setStartDate(defaults.startDate)
     setEndDate(defaults.endDate)
-    setLogs([])
-    setAnalysis(null)
-    setError('')
-    setProgress('')
   }
 
   return (
@@ -249,7 +257,8 @@ export default function Home() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => document.getElementById('archiveFile')?.click()}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading || analyzing}
             >
               Choose file
             </Button>
@@ -257,6 +266,7 @@ export default function Home() {
               {file ? file.name : 'No file chosen'}
             </span>
             <input
+              ref={fileInputRef}
               id="archiveFile"
               type="file"
               accept=".zip,.tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
