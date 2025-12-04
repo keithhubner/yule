@@ -37,8 +37,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ analysis })
   } catch (error) {
     console.error('Error analyzing archive:', error)
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Failed to analyze archive'
-    }, { status: 500 })
+
+    // Provide user-friendly error messages for common issues
+    let errorMessage = 'Failed to analyze archive'
+    if (error instanceof Error) {
+      const msg = error.message.toLowerCase()
+      if (msg.includes('invalid') || msg.includes('corrupt') || msg.includes('bad')) {
+        errorMessage = 'The archive appears to be corrupted or invalid. Please try re-creating the archive.'
+      } else if (msg.includes('end of central directory') || msg.includes('zip')) {
+        errorMessage = 'The ZIP file is invalid or corrupted. Please ensure it is a valid ZIP archive.'
+      } else if (msg.includes('gzip') || msg.includes('gunzip') || msg.includes('decompress')) {
+        errorMessage = 'The tar.gz file could not be decompressed. Please ensure it is a valid gzip archive.'
+      } else {
+        errorMessage = error.message
+      }
+    }
+
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

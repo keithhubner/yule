@@ -125,12 +125,30 @@ export default function Home() {
         throw new Error(data.error || 'Failed to analyze archive')
       }
 
-      setAnalysis(data.analysis)
+      const analysisResult = data.analysis as ArchiveAnalysis
+
+      // Validate analysis results
+      if (analysisResult.totalFiles === 0) {
+        setError('The archive appears to be empty or could not be read.')
+        return
+      }
+
+      if (analysisResult.logFiles === 0) {
+        setError('No log files (.log or .txt) were found in this archive. Please ensure your archive contains log files.')
+        return
+      }
+
+      if (analysisResult.estimatedLogEntries === 0) {
+        setError('No error or warning entries were found in the log files. The logs may be empty or in an unsupported format.')
+        return
+      }
+
+      setAnalysis(analysisResult)
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message)
       } else {
-        setError('An unknown error occurred')
+        setError('An unknown error occurred while analyzing the archive')
       }
     } finally {
       setAnalyzing(false)
@@ -272,82 +290,6 @@ export default function Home() {
           </Button>
         )}
 
-        {analysis && (
-          <div className="p-4 bg-muted rounded-lg space-y-3">
-            <h3 className="font-semibold text-sm">Archive Analysis</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span><strong>{analysis.logFiles}</strong> log files ({analysis.totalFiles} total)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileWarning className="h-4 w-4 text-muted-foreground" />
-                <span>~<strong>{analysis.estimatedLogEntries.toLocaleString()}</strong> estimated entries</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                <span><strong>{analysis.folders.length}</strong> folders</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>
-                  {analysis.dateRange.earliest && analysis.dateRange.latest ? (
-                    <><strong>{analysis.dateRange.earliest}</strong> to <strong>{analysis.dateRange.latest}</strong></>
-                  ) : (
-                    'No dates found'
-                  )}
-                </span>
-              </div>
-            </div>
-            {analysis.folders.length > 0 && (
-              <div className="pt-2 border-t">
-                <p className="text-xs text-muted-foreground mb-1">Folders:</p>
-                <div className="flex flex-wrap gap-1">
-                  {analysis.folders.slice(0, 10).map((folder) => (
-                    <span key={folder} className="px-2 py-0.5 bg-background rounded text-xs">
-                      {folder}
-                    </span>
-                  ))}
-                  {analysis.folders.length > 10 && (
-                    <span className="px-2 py-0.5 text-xs text-muted-foreground">
-                      +{analysis.folders.length - 10} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Total size: {formatBytes(analysis.totalSize)}
-            </p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="startDate">From Date</Label>
-            <Input
-              id="startDate"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="endDate">To Date</Label>
-            <Input
-              id="endDate"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {analysis?.dateRange.earliest && analysis?.dateRange.latest
-            ? 'Date range auto-populated from archive analysis. Adjust as needed.'
-            : 'Select a date range to filter log entries.'}
-        </p>
-
         {progress && (
           <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -355,31 +297,114 @@ export default function Home() {
           </div>
         )}
 
-        <div className="flex gap-2">
+        {analysis && (
+          <>
+            <div className="p-4 bg-muted rounded-lg space-y-3">
+              <h3 className="font-semibold text-sm">Archive Analysis</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span><strong>{analysis.logFiles}</strong> log files ({analysis.totalFiles} total)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FileWarning className="h-4 w-4 text-muted-foreground" />
+                  <span>~<strong>{analysis.estimatedLogEntries.toLocaleString()}</strong> estimated entries</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                  <span><strong>{analysis.folders.length}</strong> folders</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {analysis.dateRange.earliest && analysis.dateRange.latest ? (
+                      <><strong>{analysis.dateRange.earliest}</strong> to <strong>{analysis.dateRange.latest}</strong></>
+                    ) : (
+                      'No dates found'
+                    )}
+                  </span>
+                </div>
+              </div>
+              {analysis.folders.length > 0 && (
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-muted-foreground mb-1">Folders:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {analysis.folders.slice(0, 10).map((folder) => (
+                      <span key={folder} className="px-2 py-0.5 bg-background rounded text-xs">
+                        {folder}
+                      </span>
+                    ))}
+                    {analysis.folders.length > 10 && (
+                      <span className="px-2 py-0.5 text-xs text-muted-foreground">
+                        +{analysis.folders.length - 10} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Total size: {formatBytes(analysis.totalSize)}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="startDate">From Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">To Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Date range auto-populated from archive analysis. Adjust as needed.
+            </p>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleExtract}
+                disabled={loading}
+                className="flex-1"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Extracting...
+                  </>
+                ) : (
+                  'Extract Logs'
+                )}
+              </Button>
+              <Button
+                onClick={handleClear}
+                variant="outline"
+                disabled={loading || analyzing}
+              >
+                Clear
+              </Button>
+            </div>
+          </>
+        )}
+
+        {file && !analysis && !analyzing && (
           <Button
-            onClick={handleExtract}
-            disabled={loading || !file}
-            className="flex-1"
+            onClick={handleClear}
+            variant="outline"
           >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Extracting...
-              </>
-            ) : (
-              'Extract Logs'
-            )}
+            Clear
           </Button>
-          {(file || logs.length > 0 || analysis) && (
-            <Button
-              onClick={handleClear}
-              variant="outline"
-              disabled={loading || analyzing}
-            >
-              Clear
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
       {logs.length > 0 && <LogTable logs={logs} />}
