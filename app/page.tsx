@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { CopyButton } from '@/components/ui/copy-button'
 
 interface Log {
   folder: string
@@ -285,13 +286,22 @@ export default function Home() {
                     <p className="text-muted-foreground mb-2">
                       Bitwarden logs are typically located in <code className="bg-muted px-1 py-0.5 rounded">/opt/bitwarden/bwdata/logs/</code>
                     </p>
-                    <div className="bg-muted p-3 rounded-lg font-mono text-xs space-y-2">
+                    <div className="bg-muted p-3 rounded-lg font-mono text-xs space-y-1">
                       <p className="text-muted-foreground"># Navigate to the Bitwarden data directory</p>
-                      <p>cd /opt/bitwarden/bwdata</p>
+                      <div className="flex items-center justify-between group">
+                        <p>cd /opt/bitwarden/bwdata</p>
+                        <CopyButton value="cd /opt/bitwarden/bwdata" className="opacity-0 group-hover:opacity-100" />
+                      </div>
                       <p className="text-muted-foreground mt-2"># Create a zip archive of all logs</p>
-                      <p>zip -r bitwarden-logs.zip logs/</p>
+                      <div className="flex items-center justify-between group">
+                        <p>zip -r bitwarden-logs.zip logs/</p>
+                        <CopyButton value="zip -r bitwarden-logs.zip logs/" className="opacity-0 group-hover:opacity-100" />
+                      </div>
                       <p className="text-muted-foreground mt-2"># Or create a tar.gz archive</p>
-                      <p>tar -czvf bitwarden-logs.tar.gz logs/</p>
+                      <div className="flex items-center justify-between group">
+                        <p>tar -czvf bitwarden-logs.tar.gz logs/</p>
+                        <CopyButton value="tar -czvf bitwarden-logs.tar.gz logs/" className="opacity-0 group-hover:opacity-100" />
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -299,13 +309,25 @@ export default function Home() {
                     <p className="text-muted-foreground mb-2">
                       Bitwarden logs are typically located in <code className="bg-muted px-1 py-0.5 rounded">C:\ProgramData\bitwarden\bwdata\logs\</code>
                     </p>
-                    <div className="bg-muted p-3 rounded-lg font-mono text-xs space-y-2">
+                    <div className="bg-muted p-3 rounded-lg font-mono text-xs space-y-1">
                       <p className="text-muted-foreground"># Using PowerShell:</p>
-                      <p>cd C:\ProgramData\bitwarden\bwdata</p>
-                      <p>Compress-Archive -Path logs -DestinationPath bitwarden-logs.zip</p>
+                      <div className="flex items-center justify-between group">
+                        <p>cd C:\ProgramData\bitwarden\bwdata</p>
+                        <CopyButton value="cd C:\ProgramData\bitwarden\bwdata" className="opacity-0 group-hover:opacity-100" />
+                      </div>
+                      <div className="flex items-center justify-between group">
+                        <p>Compress-Archive -Path logs -DestinationPath bitwarden-logs.zip</p>
+                        <CopyButton value="Compress-Archive -Path logs -DestinationPath bitwarden-logs.zip" className="opacity-0 group-hover:opacity-100" />
+                      </div>
                       <p className="text-muted-foreground mt-2"># Or using Command Prompt with tar (Windows 10+):</p>
-                      <p>cd C:\ProgramData\bitwarden\bwdata</p>
-                      <p>tar -czvf bitwarden-logs.tar.gz logs</p>
+                      <div className="flex items-center justify-between group">
+                        <p>cd C:\ProgramData\bitwarden\bwdata</p>
+                        <CopyButton value="cd C:\ProgramData\bitwarden\bwdata" className="opacity-0 group-hover:opacity-100" />
+                      </div>
+                      <div className="flex items-center justify-between group">
+                        <p>tar -czvf bitwarden-logs.tar.gz logs</p>
+                        <CopyButton value="tar -czvf bitwarden-logs.tar.gz logs" className="opacity-0 group-hover:opacity-100" />
+                      </div>
                     </div>
                   </div>
                   <div>
