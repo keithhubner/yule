@@ -111,6 +111,60 @@ Then access the tool at http://localhost:3000
 - `main` - Latest build from main branch
 - `v1.x.x` - Specific version tags
 
+### Running on a Bitwarden Server (Direct Log Access)
+
+You can run Yule directly on your Bitwarden server and mount the logs folder for direct access. This avoids the need to create and upload archive files.
+
+> **Security Note:** The volume is mounted as read-only (`:ro`) to ensure Yule cannot modify your log files. The container runs as a non-root user with minimal privileges.
+
+**Linux - Mount Bitwarden logs:**
+
+```bash
+docker run -d -p 3000:3000 \
+  -v /opt/bitwarden/bwdata/logs:/logs:ro \
+  --security-opt=no-new-privileges:true \
+  --cap-drop=ALL \
+  ghcr.io/keithhubner/yule:latest
+```
+
+**Windows - Mount Bitwarden logs:**
+
+```powershell
+docker run -d -p 3000:3000 `
+  -v C:\ProgramData\bitwarden\bwdata\logs:/logs:ro `
+  --security-opt=no-new-privileges:true `
+  --cap-drop=ALL `
+  ghcr.io/keithhubner/yule:latest
+```
+
+**Docker Compose with volume mount:**
+
+```yaml
+version: '3.8'
+services:
+  yule:
+    image: ghcr.io/keithhubner/yule:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - /opt/bitwarden/bwdata/logs:/logs:ro  # Read-only mount
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - OPENAI_API_KEY=your-api-key  # Optional
+```
+
+When logs are mounted, you can zip them from the server and then upload the archive to Yule for analysis.
+
+**Security features when running on production servers:**
+- `:ro` - Read-only volume mount (cannot modify your logs)
+- `--security-opt=no-new-privileges:true` - Prevents privilege escalation
+- `--cap-drop=ALL` - Drops all Linux capabilities
+- Runs as non-root user (UID 1001)
+- Container has no access to host network or other containers
+
 ## Preparing Log Files
 
 ### Bitwarden Self-Hosted Logs
