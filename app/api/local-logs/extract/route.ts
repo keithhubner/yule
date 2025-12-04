@@ -84,6 +84,32 @@ function processLogContent(content: string, folder: string, filename: string, da
   return logs
 }
 
+function findLogFilesRecursive(dirPath: string): string[] {
+  const logFiles: string[] = []
+
+  try {
+    const items = fs.readdirSync(dirPath)
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item)
+      try {
+        const stat = fs.statSync(itemPath)
+        if (stat.isDirectory()) {
+          // Recurse into subdirectories
+          logFiles.push(...findLogFilesRecursive(itemPath))
+        } else if (stat.isFile() && (item.endsWith('.log') || item.endsWith('.txt'))) {
+          logFiles.push(itemPath)
+        }
+      } catch {
+        // Skip items we can't access
+      }
+    }
+  } catch {
+    // Ignore errors reading directory
+  }
+
+  return logFiles
+}
+
 export async function POST(request: NextRequest) {
   const localLogsPath = process.env.LOCAL_LOGS_PATH
 
@@ -138,16 +164,15 @@ export async function POST(request: NextRequest) {
       const stat = fs.statSync(folderPath)
       if (!stat.isDirectory()) continue
 
-      const files = fs.readdirSync(folderPath)
+      // Recursively find all log files in this folder and subfolders
+      const logFiles = findLogFilesRecursive(folderPath)
 
-      for (const file of files) {
-        if (!file.endsWith('.log') && !file.endsWith('.txt')) continue
-
-        const filePath = path.join(folderPath, file)
-
+      for (const filePath of logFiles) {
         try {
           const content = fs.readFileSync(filePath, 'utf-8')
-          const fileLogs = processLogContent(content, folderName, file, {
+          // Get relative path from folder for display
+          const relativePath = path.relative(folderPath, filePath)
+          const fileLogs = processLogContent(content, folderName, relativePath, {
             startDate,
             endDate
           })

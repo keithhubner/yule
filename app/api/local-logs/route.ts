@@ -31,7 +31,7 @@ interface LocalLogsConfig {
   }
 }
 
-function getDirectorySize(dirPath: string): { fileCount: number; totalSize: number } {
+function getDirectorySizeRecursive(dirPath: string): { fileCount: number; totalSize: number } {
   let fileCount = 0
   let totalSize = 0
 
@@ -39,10 +39,19 @@ function getDirectorySize(dirPath: string): { fileCount: number; totalSize: numb
     const items = fs.readdirSync(dirPath)
     for (const item of items) {
       const itemPath = path.join(dirPath, item)
-      const stat = fs.statSync(itemPath)
-      if (stat.isFile() && (item.endsWith('.log') || item.endsWith('.txt'))) {
-        fileCount++
-        totalSize += stat.size
+      try {
+        const stat = fs.statSync(itemPath)
+        if (stat.isDirectory()) {
+          // Recurse into subdirectories
+          const subResult = getDirectorySizeRecursive(itemPath)
+          fileCount += subResult.fileCount
+          totalSize += subResult.totalSize
+        } else if (stat.isFile() && (item.endsWith('.log') || item.endsWith('.txt'))) {
+          fileCount++
+          totalSize += stat.size
+        }
+      } catch {
+        // Skip items we can't stat
       }
     }
   } catch {
@@ -124,7 +133,7 @@ export async function GET() {
         const stat = fs.statSync(itemPath)
 
         if (stat.isDirectory()) {
-          const { fileCount, totalSize } = getDirectorySize(itemPath)
+          const { fileCount, totalSize } = getDirectorySizeRecursive(itemPath)
           folders.push({
             name: item,
             path: itemPath,
