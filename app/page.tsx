@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LogTable } from './log-table'
-import { Loader2, FileText, Search, FolderOpen, Calendar, FileWarning, HelpCircle } from 'lucide-react'
+import { Loader2, FileText, Search, FolderOpen, Calendar, FileWarning, HelpCircle, Server } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,20 @@ interface ArchiveAnalysis {
     latest: string | null
   }
   estimatedLogEntries: number
+}
+
+interface LocalLogFolder {
+  name: string
+  path: string
+  fileCount: number
+  totalSize: number
+}
+
+interface LocalLogsConfig {
+  enabled: boolean
+  path: string | null
+  folders: LocalLogFolder[]
+  error?: string
 }
 
 function formatBytes(bytes: number): string {
@@ -65,6 +79,23 @@ export default function Home() {
   const [analysis, setAnalysis] = useState<ArchiveAnalysis | null>(null)
   const [error, setError] = useState('')
   const [progress, setProgress] = useState<string>('')
+
+  // Local logs state
+  const [localLogsConfig, setLocalLogsConfig] = useState<LocalLogsConfig | null>(null)
+  const [localLogsMode, setLocalLogsMode] = useState(false)
+  const [selectedLocalFolders, setSelectedLocalFolders] = useState<string[]>([])
+
+  // Check if local logs are enabled on mount
+  useEffect(() => {
+    fetch('/api/local-logs')
+      .then(res => res.json())
+      .then((config: LocalLogsConfig) => {
+        setLocalLogsConfig(config)
+      })
+      .catch(() => {
+        setLocalLogsConfig({ enabled: false, path: null, folders: [] })
+      })
+  }, [])
 
   // Auto-populate date range when analysis completes
   useEffect(() => {
@@ -234,9 +265,80 @@ export default function Home() {
     setLogs([])
     setError('')
     setProgress('')
+    setSelectedLocalFolders([])
     const defaults = getDefaultDateRange()
     setStartDate(defaults.startDate)
     setEndDate(defaults.endDate)
+  }
+
+  const handleLocalFolderToggle = (folderName: string) => {
+    setSelectedLocalFolders(prev =>
+      prev.includes(folderName)
+        ? prev.filter(f => f !== folderName)
+        : [...prev, folderName]
+    )
+  }
+
+  const handleSelectAllLocalFolders = () => {
+    if (localLogsConfig?.folders) {
+      if (selectedLocalFolders.length === localLogsConfig.folders.length) {
+        setSelectedLocalFolders([])
+      } else {
+        setSelectedLocalFolders(localLogsConfig.folders.map(f => f.name))
+      }
+    }
+  }
+
+  const handleExtractLocalLogs = async () => {
+    if (selectedLocalFolders.length === 0) {
+      setError('Please select at least one folder')
+      return
+    }
+
+    // Validate date range
+    if (startDate && endDate && startDate > endDate) {
+      setError('Start date must be before or equal to end date')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setProgress('Reading local log files...')
+
+    try {
+      const response = await fetch('/api/local-logs/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folders: selectedLocalFolders,
+          startDate,
+          endDate
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to extract logs')
+      }
+
+      setProgress(`Found ${data.logs.length} log entries`)
+      setLogs(data.logs)
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('An unknown error occurred')
+      }
+    } finally {
+      setLoading(false)
+      setTimeout(() => setProgress(''), 2000)
+    }
+  }
+
+  const switchMode = (useLocalLogs: boolean) => {
+    handleClear()
+    setLocalLogsMode(useLocalLogs)
   }
 
   return (
@@ -259,7 +361,145 @@ export default function Home() {
         </div>
       )}
 
+      {/* Mode switcher - only show if local logs are enabled */}
+      {localLogsConfig?.enabled && (
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={!localLogsMode ? 'default' : 'outline'}
+            onClick={() => switchMode(false)}
+            className="flex-1"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Upload Archive
+          </Button>
+          <Button
+            variant={localLogsMode ? 'default' : 'outline'}
+            onClick={() => switchMode(true)}
+            className="flex-1"
+          >
+            <Server className="mr-2 h-4 w-4" />
+            Local Logs
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-4">
+        {/* LOCAL LOGS MODE */}
+        {localLogsMode && localLogsConfig?.enabled && (
+          <>
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Server className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm">Local Logs</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Reading from: <code className="bg-background px-1 py-0.5 rounded">{localLogsConfig.path}</code>
+              </p>
+
+              {localLogsConfig.folders.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No log folders found in the configured path.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-muted-foreground">Select folders to analyze:</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSelectAllLocalFolders}
+                      className="text-xs h-6"
+                    >
+                      {selectedLocalFolders.length === localLogsConfig.folders.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                    {localLogsConfig.folders.map((folder) => (
+                      <button
+                        key={folder.name}
+                        onClick={() => handleLocalFolderToggle(folder.name)}
+                        className={`p-2 rounded-lg text-left text-xs transition-colors ${
+                          selectedLocalFolders.includes(folder.name)
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-background hover:bg-accent'
+                        }`}
+                      >
+                        <div className="font-medium truncate">{folder.name}</div>
+                        <div className="text-[10px] opacity-70">
+                          {folder.fileCount} files ({formatBytes(folder.totalSize)})
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {selectedLocalFolders.length > 0 && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="localStartDate">From Date</Label>
+                    <Input
+                      id="localStartDate"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="localEndDate">To Date</Label>
+                    <Input
+                      id="localEndDate"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Filter log entries by date range.
+                </p>
+
+                {progress && (
+                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm">{progress}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleExtractLocalLogs}
+                    disabled={loading}
+                    className="flex-1"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Extract Logs ({selectedLocalFolders.length} folder{selectedLocalFolders.length !== 1 ? 's' : ''})
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleClear}
+                    variant="outline"
+                    disabled={loading}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ARCHIVE UPLOAD MODE */}
+        {!localLogsMode && (
+          <>
         <div>
           <div className="flex items-center gap-2">
             <Label htmlFor="archiveFile">Archive File</Label>
@@ -512,6 +752,8 @@ export default function Home() {
           >
             Clear
           </Button>
+        )}
+          </>
         )}
       </div>
 

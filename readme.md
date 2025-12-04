@@ -13,6 +13,7 @@ This tool was built with a lot of AI assistance and therefore is designed to be 
 ## Features
 
 - **Upload Support**: ZIP, tar.gz, and .tgz archives containing log files
+- **Local Logs Mode**: Direct access to log files from a mounted directory (no archive needed)
 - **Folder Filtering**: Filter logs based on folder/service names
 - **Daily Summary**: Interactive graph to visualize and filter logs by day
 - **Error Analysis**: AI-powered error analysis using OpenAI (when configured)
@@ -44,6 +45,7 @@ This tool was built with a lot of AI assistance and therefore is designed to be 
    OPENAI_MODEL=gpt-3.5-turbo  # or gpt-4
    MAX_FILE_SIZE_MB=100        # Maximum upload size
    MAX_DAYS_LOOKBACK=365       # Maximum days to look back
+   LOCAL_LOGS_PATH=/logs       # Path to local logs directory (enables Local Logs mode)
    ```
 
 ### Running Locally
@@ -113,31 +115,33 @@ Then access the tool at http://localhost:3000
 
 ### Running on a Bitwarden Server (Direct Log Access)
 
-You can run Yule directly on your Bitwarden server and mount the logs folder for direct access. This avoids the need to create and upload archive files.
+You can run Yule directly on your Bitwarden server and mount the logs folder for direct access. When you set the `LOCAL_LOGS_PATH` environment variable, a "Local Logs" mode button appears in the UI, allowing you to browse and analyze logs directly without creating archive files.
 
 > **Security Note:** The volume is mounted as read-only (`:ro`) to ensure Yule cannot modify your log files. The container runs as a non-root user with minimal privileges.
 
-**Linux - Mount Bitwarden logs:**
+**Linux - Mount Bitwarden logs with Local Logs mode:**
 
 ```bash
 docker run -d -p 3000:3000 \
   -v /opt/bitwarden/bwdata/logs:/logs:ro \
+  -e LOCAL_LOGS_PATH=/logs \
   --security-opt=no-new-privileges:true \
   --cap-drop=ALL \
   ghcr.io/keithhubner/yule:latest
 ```
 
-**Windows - Mount Bitwarden logs:**
+**Windows - Mount Bitwarden logs with Local Logs mode:**
 
 ```powershell
 docker run -d -p 3000:3000 `
   -v C:\ProgramData\bitwarden\bwdata\logs:/logs:ro `
+  -e LOCAL_LOGS_PATH=/logs `
   --security-opt=no-new-privileges:true `
   --cap-drop=ALL `
   ghcr.io/keithhubner/yule:latest
 ```
 
-**Docker Compose with volume mount:**
+**Docker Compose with Local Logs mode:**
 
 ```yaml
 version: '3.8'
@@ -153,10 +157,11 @@ services:
     cap_drop:
       - ALL
     environment:
-      - OPENAI_API_KEY=your-api-key  # Optional
+      - LOCAL_LOGS_PATH=/logs       # Enables Local Logs mode in UI
+      - OPENAI_API_KEY=your-api-key # Optional
 ```
 
-When logs are mounted, you can zip them from the server and then upload the archive to Yule for analysis.
+With Local Logs mode enabled, the UI shows two buttons: "Upload Archive" and "Local Logs". In Local Logs mode, you can select specific service folders to analyze and filter by date range - no need to create zip files.
 
 **Security features when running on production servers:**
 - `:ro` - Read-only volume mount (cannot modify your logs)
@@ -219,14 +224,23 @@ Log files should contain timestamps in `YYYY-MM-DD` format for date filtering to
 
 ## Using the Tool
 
+### Archive Mode (Default)
 1. **Upload Archive**: Click "Choose file" and select a .zip, .tar.gz, or .tgz file (click the ? icon for help creating archives)
 2. **Analyze Archive**: Click "Analyze Archive" to preview the contents - shows file count, estimated log entries, folders, and date range
 3. **Set Date Range**: The date range auto-populates from the archive analysis - adjust as needed
 4. **Extract Logs**: Click "Extract Logs" to process and display the log entries
-5. **Filter by Folder**: Click folder cards to filter logs by service/component
-6. **Filter by Date**: Click bars in the daily summary chart to filter by specific dates
-7. **AI Analysis**: Click the brain icon next to any log entry to get AI-powered insights (requires OpenAI API key)
-8. **Copy Logs**: Use the copy button to copy log content to clipboard
+
+### Local Logs Mode (when LOCAL_LOGS_PATH is configured)
+1. **Switch Mode**: Click "Local Logs" button to switch from archive upload mode
+2. **Select Folders**: Click on service folders to select which logs to analyze (use "Select All" for all folders)
+3. **Set Date Range**: Adjust the date range to filter log entries
+4. **Extract Logs**: Click "Extract Logs" to process and display entries from selected folders
+
+### Common Features
+- **Filter by Folder**: Click folder cards to filter logs by service/component
+- **Filter by Date**: Click bars in the daily summary chart to filter by specific dates
+- **AI Analysis**: Click the brain icon next to any log entry to get AI-powered insights (requires OpenAI API key)
+- **Copy Logs**: Use the copy button to copy log content to clipboard
 
 ## Architecture
 
