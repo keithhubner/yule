@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 
+// Force dynamic rendering to read env vars at runtime
+export const dynamic = 'force-dynamic'
+
 const DEBUG = process.env.DEBUG === 'true'
 
 function debugLog(...args: unknown[]) {

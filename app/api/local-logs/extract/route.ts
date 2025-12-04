@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 
+// Force dynamic rendering to read env vars at runtime
+export const dynamic = 'force-dynamic'
+
 interface LogEntry {
   folder: string
   file: string
