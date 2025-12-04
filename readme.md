@@ -66,7 +66,17 @@ This tool was built with a lot of AI assistance and therefore is designed to be 
    npm start
    ```
 
-### Running with Docker
+### Running with Docker (Recommended)
+
+The easiest way to run Yule is with Docker. The image is automatically built and published to GitHub Container Registry.
+
+**Quick start:**
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/keithhubner/yule:latest
+```
+
+**With AI analysis enabled:**
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -74,15 +84,32 @@ docker run -d -p 3000:3000 \
   ghcr.io/keithhubner/yule:latest
 ```
 
-Or use a specific version:
+**Using a specific version:**
 
 ```bash
-docker run -d -p 3000:3000 \
-  -e OPENAI_API_KEY=your-api-key \
-  ghcr.io/keithhubner/yule:v1.0.0
+docker run -d -p 3000:3000 ghcr.io/keithhubner/yule:main
 ```
 
-Then access the tool on http://localhost:3000
+**With docker-compose:**
+
+```yaml
+version: '3.8'
+services:
+  yule:
+    image: ghcr.io/keithhubner/yule:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - OPENAI_API_KEY=your-api-key  # Optional
+      - MAX_FILE_SIZE_MB=100         # Optional
+```
+
+Then access the tool at http://localhost:3000
+
+**Available image tags:**
+- `latest` - Latest stable release from main branch
+- `main` - Latest build from main branch
+- `v1.x.x` - Specific version tags
 
 ## Preparing Log Files
 
@@ -138,13 +165,14 @@ Log files should contain timestamps in `YYYY-MM-DD` format for date filtering to
 
 ## Using the Tool
 
-1. **Upload Archive**: Click "Choose file" and select a .zip, .tar.gz, or .tgz file
-2. **Set Days**: Specify how many days back to analyze (default: 30)
-3. **Extract Logs**: Click "Extract Logs" to process the archive
-4. **Filter by Folder**: Click folder cards to filter logs by service/component
-5. **Filter by Date**: Click bars in the daily summary chart to filter by specific dates
-6. **AI Analysis**: Click the brain icon next to any log entry to get AI-powered insights (requires OpenAI API key)
-7. **Copy Logs**: Use the copy button to copy log content to clipboard
+1. **Upload Archive**: Click "Choose file" and select a .zip, .tar.gz, or .tgz file (click the ? icon for help creating archives)
+2. **Analyze Archive**: Click "Analyze Archive" to preview the contents - shows file count, estimated log entries, folders, and date range
+3. **Set Date Range**: The date range auto-populates from the archive analysis - adjust as needed
+4. **Extract Logs**: Click "Extract Logs" to process and display the log entries
+5. **Filter by Folder**: Click folder cards to filter logs by service/component
+6. **Filter by Date**: Click bars in the daily summary chart to filter by specific dates
+7. **AI Analysis**: Click the brain icon next to any log entry to get AI-powered insights (requires OpenAI API key)
+8. **Copy Logs**: Use the copy button to copy log content to clipboard
 
 ## Architecture
 
