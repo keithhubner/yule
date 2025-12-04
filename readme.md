@@ -76,6 +76,58 @@ docker run -d -p 3000:3000 \
 
 Then access the tool on http://localhost:3000
 
+## Preparing Log Files
+
+### Bitwarden Self-Hosted Logs
+
+#### Linux Server
+
+Bitwarden logs are typically located in `/opt/bitwarden/bwdata/logs/`. To create a zip archive:
+
+```bash
+# Navigate to the Bitwarden data directory
+cd /opt/bitwarden/bwdata
+
+# Create a zip archive of all logs
+zip -r bitwarden-logs.zip logs/
+
+# Or create a tar.gz archive
+tar -czvf bitwarden-logs.tar.gz logs/
+```
+
+#### Windows Server
+
+Bitwarden logs are typically located in `C:\ProgramData\bitwarden\bwdata\logs\`. To create a zip archive:
+
+**Using PowerShell:**
+```powershell
+# Navigate to the Bitwarden data directory
+cd C:\ProgramData\bitwarden\bwdata
+
+# Create a zip archive of all logs
+Compress-Archive -Path logs -DestinationPath bitwarden-logs.zip
+```
+
+**Using Command Prompt with tar (Windows 10+):**
+```cmd
+cd C:\ProgramData\bitwarden\bwdata
+tar -czvf bitwarden-logs.tar.gz logs
+```
+
+### Other Log Sources
+
+The tool works with any logs in the following structure:
+```
+archive.zip
+├── service1/
+│   ├── service1-2024-01-15.log
+│   └── service1-2024-01-16.log
+├── service2/
+│   └── service2-2024-01-15.log
+```
+
+Log files should contain timestamps in `YYYY-MM-DD` format for date filtering to work correctly.
+
 ## Using the Tool
 
 1. **Upload Archive**: Click "Choose file" and select a .zip, .tar.gz, or .tgz file

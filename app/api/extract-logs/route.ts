@@ -4,25 +4,20 @@ import { extractLogsFromArchive } from '@/utils/logExtractor'
 export async function POST(request: NextRequest) {
   const formData = await request.formData()
   const archiveFile = formData.get('archiveFile') as File
-  const daysStr = formData.get('days') as string
-  const days = parseInt(daysStr)
+  const startDate = formData.get('startDate') as string | null
+  const endDate = formData.get('endDate') as string | null
 
   console.log('Received:', {
     hasFile: !!archiveFile,
     fileName: archiveFile?.name,
     fileSize: archiveFile?.size,
-    daysStr,
-    days
+    startDate,
+    endDate
   })
 
   if (!archiveFile) {
     console.log('Error: No archive file')
     return NextResponse.json({ error: 'Missing archive file' }, { status: 400 })
-  }
-
-  if (isNaN(days) || days < 1) {
-    console.log('Error: Invalid days value')
-    return NextResponse.json({ error: 'Invalid days value' }, { status: 400 })
   }
 
   // Validate file size (default max: 100MB, configurable via env)
@@ -46,11 +41,16 @@ export async function POST(request: NextRequest) {
     }, { status: 400 })
   }
 
-  // Validate days parameter
-  const maxDaysLookback = parseInt(process.env.MAX_DAYS_LOOKBACK || '365')
-  if (days < 1 || days > maxDaysLookback) {
+  // Validate date format if provided
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/
+  if (startDate && !datePattern.test(startDate)) {
     return NextResponse.json({
-      error: `Days must be between 1 and ${maxDaysLookback}`
+      error: 'Invalid start date format. Use YYYY-MM-DD.'
+    }, { status: 400 })
+  }
+  if (endDate && !datePattern.test(endDate)) {
+    return NextResponse.json({
+      error: 'Invalid end date format. Use YYYY-MM-DD.'
     }, { status: 400 })
   }
 
@@ -60,7 +60,10 @@ export async function POST(request: NextRequest) {
   console.log('ArrayBuffer size:', arrayBuffer.byteLength)
 
   try {
-    const logs = await extractLogsFromArchive(arrayBuffer, archiveFile.name, days)
+    const logs = await extractLogsFromArchive(arrayBuffer, archiveFile.name, {
+      startDate: startDate || null,
+      endDate: endDate || null
+    })
     console.log('Extraction complete, found', logs.length, 'logs')
     return NextResponse.json({ logs })
   } catch (error) {
@@ -70,4 +73,3 @@ export async function POST(request: NextRequest) {
     }, { status: 500 })
   }
 }
-

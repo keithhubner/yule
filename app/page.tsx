@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LogTable } from './log-table'
-import { Loader2, FileText } from 'lucide-react'
+import { Loader2, FileText, Search, FolderOpen, Calendar, FileWarning } from 'lucide-react'
 
 interface Log {
   folder: string
@@ -15,44 +15,158 @@ interface Log {
   date: Date
 }
 
+interface ArchiveAnalysis {
+  totalFiles: number
+  logFiles: number
+  totalSize: number
+  folders: string[]
+  dateRange: {
+    earliest: string | null
+    latest: string | null
+  }
+  estimatedLogEntries: number
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+function getDefaultDateRange(): { startDate: string; endDate: string } {
+  const endDate = new Date()
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - 30)
+  return {
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0],
+  }
+}
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null)
-  const [days, setDays] = useState(30)
+  const [startDate, setStartDate] = useState<string>(getDefaultDateRange().startDate)
+  const [endDate, setEndDate] = useState<string>(getDefaultDateRange().endDate)
   const [logs, setLogs] = useState<Log[]>([])
   const [loading, setLoading] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysis, setAnalysis] = useState<ArchiveAnalysis | null>(null)
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState<string>('')
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Auto-populate date range when analysis completes
+  useEffect(() => {
+    if (analysis?.dateRange.earliest && analysis?.dateRange.latest) {
+      setStartDate(analysis.dateRange.earliest)
+      setEndDate(analysis.dateRange.latest)
+    }
+  }, [analysis])
+
+  const validateFile = (selectedFile: File): string | null => {
+    const supportedTypes = ['.zip', '.tar.gz', '.tgz']
+    const isSupported = supportedTypes.some(type =>
+      selectedFile.name.toLowerCase().endsWith(type)
+    )
+
+    if (!isSupported) {
+      return 'Please select a .zip, .tar.gz, or .tgz file'
+    }
+
+    const maxFileSizeMB = 100
+    const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024
+    if (selectedFile.size > maxFileSizeBytes) {
+      return `File size exceeds maximum allowed size of ${maxFileSizeMB}MB`
+    }
+
+    return null
+  }
+
+  const handleFileChange = (selectedFile: File | null) => {
+    setFile(selectedFile)
+    setAnalysis(null)
+    setLogs([])
+    setError('')
+    // Reset to default date range
+    const defaults = getDefaultDateRange()
+    setStartDate(defaults.startDate)
+    setEndDate(defaults.endDate)
+  }
+
+  const handleAnalyze = async () => {
     if (!file) {
       setError('Please select an archive file')
       return
     }
 
-    // Validate file type
-    const supportedTypes = ['.zip', '.tar.gz', '.tgz']
-    const isSupported = supportedTypes.some(type =>
-      file.name.toLowerCase().endsWith(type)
-    )
-
-    if (!isSupported) {
-      setError('Please select a .zip, .tar.gz, or .tgz file')
+    const validationError = validateFile(file)
+    if (validationError) {
+      setError(validationError)
       return
     }
 
-    // Validate file size (default max: 100MB)
-    const maxFileSizeMB = 100
-    const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024
-    if (file.size > maxFileSizeBytes) {
-      setError(`File size exceeds maximum allowed size of ${maxFileSizeMB}MB`)
-      return
-    }
-    setLoading(true)
+    setAnalyzing(true)
     setError('')
+    setProgress('Analyzing archive structure...')
+
     try {
       const formData = new FormData()
       formData.append('archiveFile', file)
-      formData.append('days', days.toString())
+
+      const response = await fetch('/api/analyze-logs', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze archive')
+      }
+
+      setAnalysis(data.analysis)
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('An unknown error occurred')
+      }
+    } finally {
+      setAnalyzing(false)
+      setProgress('')
+    }
+  }
+
+  const handleExtract = async () => {
+    if (!file) {
+      setError('Please select an archive file')
+      return
+    }
+
+    const validationError = validateFile(file)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    // Validate date range
+    if (startDate && endDate && startDate > endDate) {
+      setError('Start date must be before or equal to end date')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setProgress('Preparing extraction...')
+
+    try {
+      const formData = new FormData()
+      formData.append('archiveFile', file)
+      if (startDate) formData.append('startDate', startDate)
+      if (endDate) formData.append('endDate', endDate)
+
+      setProgress('Extracting and processing log files...')
 
       const response = await fetch('/api/extract-logs', {
         method: 'POST',
@@ -65,6 +179,7 @@ export default function Home() {
         throw new Error(data.error || 'Failed to extract logs')
       }
 
+      setProgress(`Found ${data.logs.length} log entries`)
       setLogs(data.logs)
     } catch (err) {
       if (err instanceof Error) {
@@ -74,79 +189,178 @@ export default function Home() {
       }
     } finally {
       setLoading(false)
+      setTimeout(() => setProgress(''), 2000)
     }
   }
 
   const handleClear = () => {
     setFile(null)
-    setDays(30)
+    const defaults = getDefaultDateRange()
+    setStartDate(defaults.startDate)
+    setEndDate(defaults.endDate)
     setLogs([])
+    setAnalysis(null)
     setError('')
+    setProgress('')
   }
 
   return (
     <div className="container mx-auto p-4">
-        <div className="flex items-center mb-4">
-          <FileText className="h-6 w-6 mr-2 text-primary" aria-hidden="true" />
-          <h1 className="text-xl font-bold">Log Extractor</h1>
+      <div className="flex items-center mb-4">
+        <FileText className="h-6 w-6 mr-2 text-primary" aria-hidden="true" />
+        <h1 className="text-xl font-bold">Log Extractor</h1>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <h3 className="font-semibold text-red-800">Error</h3>
+          <p className="text-red-600">{error}</p>
+          <button
+            onClick={() => setError('')}
+            className="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="archiveFile">Archive File</Label>
+          <div className="flex items-center gap-2 mt-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => document.getElementById('archiveFile')?.click()}
+            >
+              Choose file
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {file ? file.name : 'No file chosen'}
+            </span>
+            <input
+              id="archiveFile"
+              type="file"
+              accept=".zip,.tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
+              onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Supported formats: .zip, .tar.gz, .tgz
+          </p>
         </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <h3 className="font-semibold text-red-800">Error</h3>
-            <p className="text-red-600">{error}</p>
-            <button
-              onClick={() => setError('')}
-              className="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
-            >
-              Dismiss
-            </button>
+        {file && !analysis && (
+          <Button
+            onClick={handleAnalyze}
+            disabled={analyzing}
+            variant="secondary"
+            className="w-full"
+          >
+            {analyzing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                Analyze Archive
+              </>
+            )}
+          </Button>
+        )}
+
+        {analysis && (
+          <div className="p-4 bg-muted rounded-lg space-y-3">
+            <h3 className="font-semibold text-sm">Archive Analysis</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <span><strong>{analysis.logFiles}</strong> log files ({analysis.totalFiles} total)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <FileWarning className="h-4 w-4 text-muted-foreground" />
+                <span>~<strong>{analysis.estimatedLogEntries.toLocaleString()}</strong> estimated entries</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                <span><strong>{analysis.folders.length}</strong> folders</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span>
+                  {analysis.dateRange.earliest && analysis.dateRange.latest ? (
+                    <><strong>{analysis.dateRange.earliest}</strong> to <strong>{analysis.dateRange.latest}</strong></>
+                  ) : (
+                    'No dates found'
+                  )}
+                </span>
+              </div>
+            </div>
+            {analysis.folders.length > 0 && (
+              <div className="pt-2 border-t">
+                <p className="text-xs text-muted-foreground mb-1">Folders:</p>
+                <div className="flex flex-wrap gap-1">
+                  {analysis.folders.slice(0, 10).map((folder) => (
+                    <span key={folder} className="px-2 py-0.5 bg-background rounded text-xs">
+                      {folder}
+                    </span>
+                  ))}
+                  {analysis.folders.length > 10 && (
+                    <span className="px-2 py-0.5 text-xs text-muted-foreground">
+                      +{analysis.folders.length - 10} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Total size: {formatBytes(analysis.totalSize)}
+            </p>
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="archiveFile">Archive File</Label>
-            <div className="flex items-center gap-2 mt-1">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => document.getElementById('archiveFile')?.click()}
-              >
-                Choose file
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {file ? file.name : 'No file chosen'}
-              </span>
-              <input
-                id="archiveFile"
-                type="file"
-                accept=".zip,.tar.gz,.tgz,application/gzip,application/x-gzip,application/x-tar"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="hidden"
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Supported formats: .zip, .tar.gz, .tgz
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="days">Days to Look Back</Label>
+            <Label htmlFor="startDate">From Date</Label>
             <Input
-              id="days"
-              type="number"
-              value={days}
-              onChange={(e) => setDays(parseInt(e.target.value))}
-              min="1"
-              max="365"
+              id="startDate"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
             />
-            <p className="text-sm text-muted-foreground">
-              Enter a value between 1 and 365 days
-            </p>
           </div>
+          <div>
+            <Label htmlFor="endDate">To Date</Label>
+            <Input
+              id="endDate"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {analysis?.dateRange.earliest && analysis?.dateRange.latest
+            ? 'Date range auto-populated from archive analysis. Adjust as needed.'
+            : 'Select a date range to filter log entries.'}
+        </p>
 
-          <Button onClick={handleSubmit} disabled={loading} className="w-full">
+        {progress && (
+          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-sm">{progress}</span>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button
+            onClick={handleExtract}
+            disabled={loading || !file}
+            className="flex-1"
+          >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -156,9 +370,19 @@ export default function Home() {
               'Extract Logs'
             )}
           </Button>
+          {(file || logs.length > 0 || analysis) && (
+            <Button
+              onClick={handleClear}
+              variant="outline"
+              disabled={loading || analyzing}
+            >
+              Clear
+            </Button>
+          )}
         </div>
+      </div>
 
-        {logs.length > 0 && <LogTable logs={logs} />}
+      {logs.length > 0 && <LogTable logs={logs} />}
     </div>
   )
 }
