@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LogTable } from './log-table'
-import { Loader2, FileText, Search, FolderOpen, Calendar, FileWarning, HelpCircle, Server } from 'lucide-react'
+import { Loader2, FileText, Search, FolderOpen, Calendar, FileWarning, HelpCircle, Server, Radio, Square } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -85,6 +85,12 @@ export default function Home() {
   const [localLogsMode, setLocalLogsMode] = useState(false)
   const [selectedLocalFolders, setSelectedLocalFolders] = useState<string[]>([])
 
+  // Live tail state
+  const [liveTailEnabled, setLiveTailEnabled] = useState(false)
+  const [liveTailConnected, setLiveTailConnected] = useState(false)
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const seenLogIdsRef = useRef<Set<string>>(new Set())
+
   // Check if local logs are enabled on mount
   useEffect(() => {
     fetch('/api/local-logs')
@@ -104,6 +110,82 @@ export default function Home() {
       setEndDate(analysis.dateRange.latest)
     }
   }, [analysis])
+
+  // Stop live tail when leaving local logs mode or when folders change
+  const stopLiveTail = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+    setLiveTailConnected(false)
+    setLiveTailEnabled(false)
+  }, [])
+
+  // Live tail connection effect
+  useEffect(() => {
+    if (!liveTailEnabled || selectedLocalFolders.length === 0) {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+        setLiveTailConnected(false)
+      }
+      return
+    }
+
+    const foldersParam = selectedLocalFolders.join(',')
+    const eventSource = new EventSource(`/api/local-logs/tail?folders=${encodeURIComponent(foldersParam)}`)
+    eventSourceRef.current = eventSource
+
+    eventSource.onopen = () => {
+      setLiveTailConnected(true)
+    }
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+
+        if (data.type === 'connected') {
+          setProgress('Live tail connected - watching for new logs...')
+          setTimeout(() => setProgress(''), 3000)
+        } else if (data.type === 'log') {
+          const log = data.log
+          // Deduplicate logs by ID
+          if (!seenLogIdsRef.current.has(log.id)) {
+            seenLogIdsRef.current.add(log.id)
+            setLogs(prevLogs => [...prevLogs, {
+              folder: log.folder,
+              file: log.file,
+              lineNumber: log.lineNumber,
+              content: log.content,
+              date: new Date(log.date),
+            }])
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing SSE message:', err)
+      }
+    }
+
+    eventSource.onerror = () => {
+      setLiveTailConnected(false)
+      setError('Live tail connection lost. Please try again.')
+      stopLiveTail()
+    }
+
+    return () => {
+      eventSource.close()
+      setLiveTailConnected(false)
+    }
+  }, [liveTailEnabled, selectedLocalFolders, stopLiveTail])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+      }
+    }
+  }, [])
 
   const validateFile = (selectedFile: File): string | null => {
     const supportedTypes = ['.zip', '.tar.gz', '.tgz']
@@ -255,6 +337,9 @@ export default function Home() {
   }
 
   const handleClear = () => {
+    // Stop live tail if active
+    stopLiveTail()
+    seenLogIdsRef.current.clear()
     // Reset file input element
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -337,8 +422,26 @@ export default function Home() {
   }
 
   const switchMode = (useLocalLogs: boolean) => {
+    stopLiveTail()
     handleClear()
     setLocalLogsMode(useLocalLogs)
+  }
+
+  const handleStartLiveTail = () => {
+    if (selectedLocalFolders.length === 0) {
+      setError('Please select at least one folder')
+      return
+    }
+    // Clear existing logs when starting live tail
+    setLogs([])
+    seenLogIdsRef.current.clear()
+    setLiveTailEnabled(true)
+  }
+
+  const handleStopLiveTail = () => {
+    stopLiveTail()
+    setProgress('Live tail stopped')
+    setTimeout(() => setProgress(''), 2000)
   }
 
   return (
@@ -469,7 +572,7 @@ export default function Home() {
                 <div className="flex gap-2">
                   <Button
                     onClick={handleExtractLocalLogs}
-                    disabled={loading}
+                    disabled={loading || liveTailEnabled}
                     className="flex-1"
                   >
                     {loading ? (
@@ -484,10 +587,33 @@ export default function Home() {
                       </>
                     )}
                   </Button>
+                  {liveTailEnabled ? (
+                    <Button
+                      onClick={handleStopLiveTail}
+                      variant="destructive"
+                      className="flex-1"
+                    >
+                      <Square className="mr-2 h-4 w-4" />
+                      Stop Live Tail
+                      {liveTailConnected && (
+                        <span className="ml-2 h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleStartLiveTail}
+                      variant="secondary"
+                      disabled={loading}
+                      className="flex-1"
+                    >
+                      <Radio className="mr-2 h-4 w-4" />
+                      Live Tail
+                    </Button>
+                  )}
                   <Button
                     onClick={handleClear}
                     variant="outline"
-                    disabled={loading}
+                    disabled={loading || liveTailEnabled}
                   >
                     Clear
                   </Button>
