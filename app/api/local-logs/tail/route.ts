@@ -155,16 +155,17 @@ function getFileStates(localLogsPath: string, folders: string[]): FileState[] {
 }
 
 export async function GET(request: NextRequest) {
-  const localLogsPath = process.env.LOCAL_LOGS_PATH
+  const searchParams = request.nextUrl.searchParams
+  const customPath = searchParams.get('path')
+  const localLogsPath = customPath || process.env.LOCAL_LOGS_PATH
 
   if (!localLogsPath) {
-    return new Response(JSON.stringify({ error: 'Local logs not configured' }), {
+    return new Response(JSON.stringify({ error: 'No logs path configured' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
   }
 
-  const searchParams = request.nextUrl.searchParams
   const foldersParam = searchParams.get('folders')
 
   if (!foldersParam) {

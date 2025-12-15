@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { CopyButton } from '@/components/ui/copy-button'
+import { FolderBrowser } from '@/components/ui/folder-browser'
 
 interface Log {
   folder: string
@@ -47,6 +48,7 @@ interface LocalLogsConfig {
   enabled: boolean
   path: string | null
   folders: LocalLogFolder[]
+  isCustomPath?: boolean
   error?: string
 }
 
@@ -80,10 +82,19 @@ export default function Home() {
   const [error, setError] = useState('')
   const [progress, setProgress] = useState<string>('')
 
-  // Local logs state
-  const [localLogsConfig, setLocalLogsConfig] = useState<LocalLogsConfig | null>(null)
-  const [localLogsMode, setLocalLogsMode] = useState(false)
-  const [selectedLocalFolders, setSelectedLocalFolders] = useState<string[]>([])
+  // Local logs state (server-side when LOCAL_LOGS_PATH is configured)
+  const [serverLogsConfig, setServerLogsConfig] = useState<LocalLogsConfig | null>(null)
+  const [selectedServerFolders, setSelectedServerFolders] = useState<string[]>([])
+
+  // Browse folder state (client-side folder browser)
+  const [browseLogsConfig, setBrowseLogsConfig] = useState<LocalLogsConfig | null>(null)
+  const [selectedBrowseFolders, setSelectedBrowseFolders] = useState<string[]>([])
+  const [browsePath, setBrowsePath] = useState<string>('')
+  const [loadingPath, setLoadingPath] = useState(false)
+  const [folderBrowserOpen, setFolderBrowserOpen] = useState(false)
+
+  // Mode: 'archive' | 'server' | 'browse'
+  const [mode, setMode] = useState<'archive' | 'server' | 'browse'>('archive')
 
   // Live tail state
   const [liveTailEnabled, setLiveTailEnabled] = useState(false)
@@ -91,15 +102,15 @@ export default function Home() {
   const eventSourceRef = useRef<EventSource | null>(null)
   const seenLogIdsRef = useRef<Set<string>>(new Set())
 
-  // Check if local logs are enabled on mount
+  // Check if server logs are enabled on mount (LOCAL_LOGS_PATH env var)
   useEffect(() => {
     fetch('/api/local-logs')
       .then(res => res.json())
       .then((config: LocalLogsConfig) => {
-        setLocalLogsConfig(config)
+        setServerLogsConfig(config)
       })
       .catch(() => {
-        setLocalLogsConfig({ enabled: false, path: null, folders: [] })
+        setServerLogsConfig({ enabled: false, path: null, folders: [] })
       })
   }, [])
 
@@ -121,9 +132,9 @@ export default function Home() {
     setLiveTailEnabled(false)
   }, [])
 
-  // Live tail connection effect
+  // Live tail connection effect (only for server logs mode)
   useEffect(() => {
-    if (!liveTailEnabled || selectedLocalFolders.length === 0) {
+    if (!liveTailEnabled || selectedServerFolders.length === 0 || mode !== 'server') {
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
         eventSourceRef.current = null
@@ -132,7 +143,7 @@ export default function Home() {
       return
     }
 
-    const foldersParam = selectedLocalFolders.join(',')
+    const foldersParam = selectedServerFolders.join(',')
     const eventSource = new EventSource(`/api/local-logs/tail?folders=${encodeURIComponent(foldersParam)}`)
     eventSourceRef.current = eventSource
 
@@ -176,7 +187,7 @@ export default function Home() {
       eventSource.close()
       setLiveTailConnected(false)
     }
-  }, [liveTailEnabled, selectedLocalFolders, stopLiveTail])
+  }, [liveTailEnabled, selectedServerFolders, stopLiveTail, mode])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -350,37 +361,93 @@ export default function Home() {
     setLogs([])
     setError('')
     setProgress('')
-    setSelectedLocalFolders([])
+    setSelectedServerFolders([])
+    setSelectedBrowseFolders([])
     const defaults = getDefaultDateRange()
     setStartDate(defaults.startDate)
     setEndDate(defaults.endDate)
   }
 
-  const handleLocalFolderToggle = (folderName: string) => {
-    setSelectedLocalFolders(prev =>
+  // Server logs folder toggle
+  const handleServerFolderToggle = (folderName: string) => {
+    setSelectedServerFolders(prev =>
       prev.includes(folderName)
         ? prev.filter(f => f !== folderName)
         : [...prev, folderName]
     )
   }
 
-  const handleSelectAllLocalFolders = () => {
-    if (localLogsConfig?.folders) {
-      if (selectedLocalFolders.length === localLogsConfig.folders.length) {
-        setSelectedLocalFolders([])
+  // Browse folder toggle
+  const handleBrowseFolderToggle = (folderName: string) => {
+    setSelectedBrowseFolders(prev =>
+      prev.includes(folderName)
+        ? prev.filter(f => f !== folderName)
+        : [...prev, folderName]
+    )
+  }
+
+  const handleLoadBrowsePath = async (pathToLoad?: string) => {
+    const targetPath = pathToLoad || browsePath.trim()
+    if (!targetPath) {
+      setError('Please enter a folder path')
+      return
+    }
+
+    setLoadingPath(true)
+    setError('')
+    setSelectedBrowseFolders([])
+
+    try {
+      const response = await fetch(`/api/local-logs?path=${encodeURIComponent(targetPath)}`)
+      const config: LocalLogsConfig = await response.json()
+
+      if (config.error) {
+        setError(config.error)
+        setBrowseLogsConfig({ enabled: false, path: null, folders: [], isCustomPath: true })
       } else {
-        setSelectedLocalFolders(localLogsConfig.folders.map(f => f.name))
+        setBrowseLogsConfig(config)
+        setBrowsePath(targetPath)
+      }
+    } catch {
+      setError('Failed to load folder')
+      setBrowseLogsConfig({ enabled: false, path: null, folders: [], isCustomPath: true })
+    } finally {
+      setLoadingPath(false)
+    }
+  }
+
+  const handleFolderBrowserSelect = (path: string) => {
+    setBrowsePath(path)
+    handleLoadBrowsePath(path)
+  }
+
+  const handleSelectAllServerFolders = () => {
+    if (serverLogsConfig?.folders) {
+      if (selectedServerFolders.length === serverLogsConfig.folders.length) {
+        setSelectedServerFolders([])
+      } else {
+        setSelectedServerFolders(serverLogsConfig.folders.map(f => f.name))
       }
     }
   }
 
-  const handleExtractLocalLogs = async () => {
-    if (selectedLocalFolders.length === 0) {
+  const handleSelectAllBrowseFolders = () => {
+    if (browseLogsConfig?.folders) {
+      if (selectedBrowseFolders.length === browseLogsConfig.folders.length) {
+        setSelectedBrowseFolders([])
+      } else {
+        setSelectedBrowseFolders(browseLogsConfig.folders.map(f => f.name))
+      }
+    }
+  }
+
+  // Extract logs from server logs (LOCAL_LOGS_PATH)
+  const handleExtractServerLogs = async () => {
+    if (selectedServerFolders.length === 0) {
       setError('Please select at least one folder')
       return
     }
 
-    // Validate date range
     if (startDate && endDate && startDate > endDate) {
       setError('Start date must be before or equal to end date')
       return
@@ -388,14 +455,14 @@ export default function Home() {
 
     setLoading(true)
     setError('')
-    setProgress('Reading local log files...')
+    setProgress('Reading server log files...')
 
     try {
       const response = await fetch('/api/local-logs/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          folders: selectedLocalFolders,
+          folders: selectedServerFolders,
           startDate,
           endDate
         })
@@ -421,14 +488,70 @@ export default function Home() {
     }
   }
 
-  const switchMode = (useLocalLogs: boolean) => {
+  // Extract logs from browsed folder
+  const handleExtractBrowseLogs = async () => {
+    if (selectedBrowseFolders.length === 0) {
+      setError('Please select at least one folder')
+      return
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      setError('Start date must be before or equal to end date')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setProgress('Reading log files...')
+
+    try {
+      const response = await fetch('/api/local-logs/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folders: selectedBrowseFolders,
+          startDate,
+          endDate,
+          customPath: browseLogsConfig?.path
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to extract logs')
+      }
+
+      setProgress(`Found ${data.logs.length} log entries`)
+      setLogs(data.logs)
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('An unknown error occurred')
+      }
+    } finally {
+      setLoading(false)
+      setTimeout(() => setProgress(''), 2000)
+    }
+  }
+
+  const switchMode = (newMode: 'archive' | 'server' | 'browse') => {
     stopLiveTail()
     handleClear()
-    setLocalLogsMode(useLocalLogs)
+    setMode(newMode)
+    // For browse mode, use a wider default date range (1 year back)
+    if (newMode === 'browse') {
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setFullYear(startDate.getFullYear() - 1)
+      setStartDate(startDate.toISOString().split('T')[0])
+      setEndDate(endDate.toISOString().split('T')[0])
+    }
   }
 
   const handleStartLiveTail = () => {
-    if (selectedLocalFolders.length === 0) {
+    if (selectedServerFolders.length === 0) {
       setError('Please select at least one folder')
       return
     }
@@ -464,42 +587,50 @@ export default function Home() {
         </div>
       )}
 
-      {/* Mode switcher - only show if local logs are enabled */}
-      {localLogsConfig?.enabled && (
-        <div className="flex gap-2 mb-4">
+      {/* Mode switcher */}
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant={mode === 'archive' ? 'default' : 'outline'}
+          onClick={() => switchMode('archive')}
+          className="flex-1"
+        >
+          <FileText className="mr-2 h-4 w-4" />
+          Upload Archive
+        </Button>
+        {serverLogsConfig?.enabled && (
           <Button
-            variant={!localLogsMode ? 'default' : 'outline'}
-            onClick={() => switchMode(false)}
-            className="flex-1"
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            Upload Archive
-          </Button>
-          <Button
-            variant={localLogsMode ? 'default' : 'outline'}
-            onClick={() => switchMode(true)}
+            variant={mode === 'server' ? 'default' : 'outline'}
+            onClick={() => switchMode('server')}
             className="flex-1"
           >
             <Server className="mr-2 h-4 w-4" />
-            Local Logs
+            Server Logs
           </Button>
-        </div>
-      )}
+        )}
+        <Button
+          variant={mode === 'browse' ? 'default' : 'outline'}
+          onClick={() => switchMode('browse')}
+          className="flex-1"
+        >
+          <FolderOpen className="mr-2 h-4 w-4" />
+          Browse Folder
+        </Button>
+      </div>
 
       <div className="space-y-4">
-        {/* LOCAL LOGS MODE */}
-        {localLogsMode && localLogsConfig?.enabled && (
+        {/* SERVER LOGS MODE - when LOCAL_LOGS_PATH is configured */}
+        {mode === 'server' && serverLogsConfig?.enabled && (
           <>
             <div className="p-4 bg-muted rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Server className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-sm">Local Logs</h3>
+                <h3 className="font-semibold text-sm">Server Log Folders</h3>
               </div>
               <p className="text-xs text-muted-foreground mb-3">
-                Reading from: <code className="bg-background px-1 py-0.5 rounded">{localLogsConfig.path}</code>
+                Reading from: <code className="bg-background px-1 py-0.5 rounded">{serverLogsConfig.path}</code>
               </p>
 
-              {localLogsConfig.folders.length === 0 ? (
+              {serverLogsConfig.folders.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No log folders found in the configured path.</p>
               ) : (
                 <>
@@ -508,19 +639,19 @@ export default function Home() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={handleSelectAllLocalFolders}
+                      onClick={handleSelectAllServerFolders}
                       className="text-xs h-6"
                     >
-                      {selectedLocalFolders.length === localLogsConfig.folders.length ? 'Deselect All' : 'Select All'}
+                      {selectedServerFolders.length === serverLogsConfig.folders.length ? 'Deselect All' : 'Select All'}
                     </Button>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
-                    {localLogsConfig.folders.map((folder) => (
+                    {serverLogsConfig.folders.map((folder) => (
                       <button
                         key={folder.name}
-                        onClick={() => handleLocalFolderToggle(folder.name)}
+                        onClick={() => handleServerFolderToggle(folder.name)}
                         className={`p-2 rounded-lg text-left text-xs transition-colors ${
-                          selectedLocalFolders.includes(folder.name)
+                          selectedServerFolders.includes(folder.name)
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-background hover:bg-accent'
                         }`}
@@ -536,22 +667,22 @@ export default function Home() {
               )}
             </div>
 
-            {selectedLocalFolders.length > 0 && (
+            {selectedServerFolders.length > 0 && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="localStartDate">From Date</Label>
+                    <Label htmlFor="serverStartDate">From Date</Label>
                     <Input
-                      id="localStartDate"
+                      id="serverStartDate"
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="localEndDate">To Date</Label>
+                    <Label htmlFor="serverEndDate">To Date</Label>
                     <Input
-                      id="localEndDate"
+                      id="serverEndDate"
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
@@ -571,7 +702,7 @@ export default function Home() {
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={handleExtractLocalLogs}
+                    onClick={handleExtractServerLogs}
                     disabled={loading || liveTailEnabled}
                     className="flex-1"
                   >
@@ -583,7 +714,7 @@ export default function Home() {
                     ) : (
                       <>
                         <Search className="mr-2 h-4 w-4" />
-                        Extract Logs ({selectedLocalFolders.length} folder{selectedLocalFolders.length !== 1 ? 's' : ''})
+                        Extract Logs ({selectedServerFolders.length} folder{selectedServerFolders.length !== 1 ? 's' : ''})
                       </>
                     )}
                   </Button>
@@ -623,8 +754,172 @@ export default function Home() {
           </>
         )}
 
+        {/* BROWSE FOLDER MODE */}
+        {mode === 'browse' && (
+          <>
+            {/* Folder browser */}
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <FolderOpen className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm">Select Folder</h3>
+              </div>
+
+              {browseLogsConfig?.enabled && browseLogsConfig.path ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 p-2 bg-background rounded border">
+                    <FolderOpen className="h-4 w-4 text-primary flex-shrink-0" />
+                    <code className="text-sm flex-1 truncate">{browseLogsConfig.path}</code>
+                  </div>
+                  <Button
+                    onClick={() => setFolderBrowserOpen(true)}
+                    variant="outline"
+                    className="w-full"
+                    disabled={loadingPath}
+                  >
+                    {loadingPath ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                    )}
+                    Change Folder
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  onClick={() => setFolderBrowserOpen(true)}
+                  variant="secondary"
+                  className="w-full"
+                  disabled={loadingPath}
+                >
+                  {loadingPath ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                  )}
+                  Browse for Folder
+                </Button>
+              )}
+            </div>
+
+            <FolderBrowser
+              open={folderBrowserOpen}
+              onOpenChange={setFolderBrowserOpen}
+              onSelect={handleFolderBrowserSelect}
+              initialPath={browsePath || undefined}
+            />
+
+            {/* Folder selection - only show when folders are loaded */}
+            {browseLogsConfig?.enabled && (
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <FolderOpen className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold text-sm">Log Folders</h3>
+                </div>
+
+                {browseLogsConfig.folders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No log folders found in the selected path.</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-muted-foreground">Select folders to analyze:</p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSelectAllBrowseFolders}
+                        className="text-xs h-6"
+                      >
+                        {selectedBrowseFolders.length === browseLogsConfig.folders.length ? 'Deselect All' : 'Select All'}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                      {browseLogsConfig.folders.map((folder) => (
+                        <button
+                          key={folder.name}
+                          onClick={() => handleBrowseFolderToggle(folder.name)}
+                          className={`p-2 rounded-lg text-left text-xs transition-colors ${
+                            selectedBrowseFolders.includes(folder.name)
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-background hover:bg-accent'
+                          }`}
+                        >
+                          <div className="font-medium truncate">{folder.name}</div>
+                          <div className="text-[10px] opacity-70">
+                            {folder.fileCount} files ({formatBytes(folder.totalSize)})
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {selectedBrowseFolders.length > 0 && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="browseStartDate">From Date</Label>
+                    <Input
+                      id="browseStartDate"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="browseEndDate">To Date</Label>
+                    <Input
+                      id="browseEndDate"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Filter log entries by date range.
+                </p>
+
+                {progress && (
+                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm">{progress}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleExtractBrowseLogs}
+                    disabled={loading}
+                    className="flex-1"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Extract Logs ({selectedBrowseFolders.length} folder{selectedBrowseFolders.length !== 1 ? 's' : ''})
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleClear}
+                    variant="outline"
+                    disabled={loading}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
         {/* ARCHIVE UPLOAD MODE */}
-        {!localLogsMode && (
+        {mode === 'archive' && (
           <>
         <div>
           <div className="flex items-center gap-2">

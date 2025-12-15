@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 
@@ -24,6 +24,7 @@ interface LocalLogsConfig {
   enabled: boolean
   path: string | null
   folders: LogFolder[]
+  isCustomPath?: boolean
   debug?: {
     envValue: string | undefined
     pathExists: boolean
@@ -61,18 +62,23 @@ function getDirectorySizeRecursive(dirPath: string): { fileCount: number; totalS
   return { fileCount, totalSize }
 }
 
-export async function GET() {
-  const localLogsPath = process.env.LOCAL_LOGS_PATH
+export async function GET(request: NextRequest) {
+  // Check for custom path in query params first, then fall back to env var
+  const searchParams = request.nextUrl.searchParams
+  const customPath = searchParams.get('path')
+  const localLogsPath = customPath || process.env.LOCAL_LOGS_PATH
+  const isCustomPath = !!customPath
 
   debugLog('LOCAL_LOGS_PATH env value:', localLogsPath)
   debugLog('All env vars with LOCAL:', Object.keys(process.env).filter(k => k.includes('LOCAL')))
 
   if (!localLogsPath) {
-    debugLog('LOCAL_LOGS_PATH not set, returning disabled')
+    debugLog('No path provided, returning disabled')
     return NextResponse.json({
       enabled: false,
       path: null,
       folders: [],
+      isCustomPath: false,
       debug: DEBUG ? {
         envValue: localLogsPath,
         pathExists: false,
@@ -96,7 +102,8 @@ export async function GET() {
         enabled: false,
         path: localLogsPath,
         folders: [],
-        error: 'LOCAL_LOGS_PATH is not a directory',
+        isCustomPath,
+        error: 'Path is not a directory',
         debug: DEBUG ? {
           envValue: localLogsPath,
           pathExists,
@@ -110,7 +117,8 @@ export async function GET() {
       enabled: false,
       path: localLogsPath,
       folders: [],
-      error: 'LOCAL_LOGS_PATH does not exist or is not accessible',
+      isCustomPath,
+      error: 'Path does not exist or is not accessible',
       debug: DEBUG ? {
         envValue: localLogsPath,
         pathExists: false,
@@ -151,7 +159,8 @@ export async function GET() {
       enabled: false,
       path: localLogsPath,
       folders: [],
-      error: 'Unable to read LOCAL_LOGS_PATH directory',
+      isCustomPath,
+      error: 'Unable to read directory',
       debug: DEBUG ? {
         envValue: localLogsPath,
         pathExists,
@@ -166,6 +175,7 @@ export async function GET() {
     enabled: true,
     path: localLogsPath,
     folders: folders.sort((a, b) => a.name.localeCompare(b.name)),
+    isCustomPath,
     debug: DEBUG ? {
       envValue: localLogsPath,
       pathExists,

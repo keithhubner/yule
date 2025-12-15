@@ -23,7 +23,8 @@ function isValidDate(date: unknown): date is Date {
 }
 
 function processLogContent(content: string, folder: string, filename: string, dateRange: DateRange): LogEntry[] {
-  const logPattern = /^(\d{4}-\d{2}-\d{2}.*?)\s+(\[(Error|Warning|Critical)\]|ERROR|WARN|CRITICAL).*?/i
+  // Match lines starting with date and containing error/warning/critical
+  const logPattern = /^(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[\d.:+\s-]*)\s*\[(Error|Warning|Critical|ERR|WARN|CRIT)\]/i
   const logs: LogEntry[] = []
 
   const startDate = dateRange.startDate ? new Date(dateRange.startDate) : null
@@ -59,7 +60,17 @@ function processLogContent(content: string, folder: string, filename: string, da
       }
       errorStartLine = index
       currentError.push(line.trim())
-      const parsedDate = new Date(match[1])
+      // Parse date - extract just the date/time part before timezone
+      const dateStr = match[1].trim()
+      // Try parsing the full string first, then fall back to just the date portion
+      let parsedDate = new Date(dateStr)
+      if (!isValidDate(parsedDate)) {
+        // Try extracting just YYYY-MM-DD HH:MM:SS
+        const simpleDateMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/)
+        if (simpleDateMatch) {
+          parsedDate = new Date(`${simpleDateMatch[1]}T${simpleDateMatch[2]}`)
+        }
+      }
       if (isValidDate(parsedDate)) {
         errorDate = parsedDate
       }
@@ -111,12 +122,6 @@ function findLogFilesRecursive(dirPath: string): string[] {
 }
 
 export async function POST(request: NextRequest) {
-  const localLogsPath = process.env.LOCAL_LOGS_PATH
-
-  if (!localLogsPath) {
-    return NextResponse.json({ error: 'Local logs not configured' }, { status: 400 })
-  }
-
   let body
   try {
     body = await request.json()
@@ -124,10 +129,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { folders, startDate, endDate } = body as {
+  const { folders, startDate, endDate, customPath } = body as {
     folders: string[]
     startDate: string | null
     endDate: string | null
+    customPath?: string
+  }
+
+  // Use custom path if provided, otherwise fall back to env var
+  const localLogsPath = customPath || process.env.LOCAL_LOGS_PATH
+
+  if (!localLogsPath) {
+    return NextResponse.json({ error: 'No logs path configured' }, { status: 400 })
   }
 
   if (!folders || !Array.isArray(folders) || folders.length === 0) {
