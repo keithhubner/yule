@@ -95,7 +95,11 @@ interface DateRange {
 }
 
 function processLogContent(content: string, filename: string, dateRange: DateRange): LogEntry[] {
-  const logPattern = /^(\d{4}-\d{2}-\d{2}.*?)\s+(\[(Error|Warning|Critical)\]|ERROR|WARN|CRITICAL).*?/i;
+  // Match various log formats:
+  // - [Error], [Warning], [Critical] - full names
+  // - [ERR], [WRN], [CRIT], [FTL] - abbreviated
+  // - ERROR, WARN, CRITICAL - uppercase without brackets
+  const logPattern = /^(\d{4}-\d{2}-\d{2}.*?)\s+(\[(Error|Warning|Critical|ERR|WRN|CRIT|FTL|FAT)\]|ERROR|WARN|CRITICAL|FATAL)/i;
   const logs: LogEntry[] = [];
 
   // Parse date range
@@ -163,6 +167,7 @@ async function extractFromZip(zipFile: ArrayBuffer, dateRange: DateRange): Promi
   const zip = new JSZip();
   await zip.loadAsync(zipFile);
 
+  let sampleLogged = false;
   for (const [filename, file] of Object.entries(zip.files)) {
     // Sanitize the file path
     const sanitizedPath = sanitizePath(filename);
@@ -173,6 +178,18 @@ async function extractFromZip(zipFile: ArrayBuffer, dateRange: DateRange): Promi
 
     if (!file.dir && (sanitizedPath.endsWith('.log') || sanitizedPath.endsWith('.txt') || !path.extname(sanitizedPath))) {
       const content = await file.async('string');
+
+      // Debug: Log sample of first log file to understand format
+      if (!sampleLogged && content.length > 0) {
+        console.log('=== DEBUG: Sample log file ===');
+        console.log('File:', sanitizedPath);
+        console.log('First 10 lines:');
+        const sampleLines = content.split('\n').slice(0, 10);
+        sampleLines.forEach((line, i) => console.log(`  ${i + 1}: ${line.substring(0, 200)}`));
+        console.log('==============================');
+        sampleLogged = true;
+      }
+
       logs.push(...processLogContent(content, sanitizedPath, dateRange));
     }
   }
@@ -275,7 +292,7 @@ async function analyzeZip(zipFile: ArrayBuffer): Promise<ArchiveAnalysis> {
   let estimatedLogEntries = 0;
 
   const datePattern = /\d{4}-\d{2}-\d{2}/;
-  const logPattern = /\[(Error|Warning|Critical)\]|ERROR|WARN|CRITICAL/i;
+  const logPattern = /\[(Error|Warning|Critical|ERR|WRN|CRIT|FTL|FAT)\]|ERROR|WARN|CRITICAL|FATAL/i;
 
   for (const [filename, file] of Object.entries(zip.files)) {
     const sanitizedPath = sanitizePath(filename);
@@ -342,7 +359,7 @@ async function analyzeTarGz(tarGzFile: ArrayBuffer): Promise<ArchiveAnalysis> {
     let estimatedLogEntries = 0;
 
     const datePattern = /\d{4}-\d{2}-\d{2}/;
-    const logPattern = /\[(Error|Warning|Critical)\]|ERROR|WARN|CRITICAL/i;
+    const logPattern = /\[(Error|Warning|Critical|ERR|WRN|CRIT|FTL|FAT)\]|ERROR|WARN|CRITICAL|FATAL/i;
 
     const extract = tar.extract();
 

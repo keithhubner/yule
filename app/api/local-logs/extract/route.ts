@@ -23,8 +23,8 @@ function isValidDate(date: unknown): date is Date {
 }
 
 function processLogContent(content: string, folder: string, filename: string, dateRange: DateRange): LogEntry[] {
-  // Match lines starting with date and containing error/warning/critical
-  const logPattern = /^(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[\d.:+\s-]*)\s*\[(Error|Warning|Critical|ERR|WARN|CRIT)\]/i
+  // Match lines starting with date and containing error/warning/critical/fatal
+  const logPattern = /^(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[\d.:+\s-]*)\s*\[(Error|Warning|Critical|ERR|WRN|CRIT|FTL|FAT)\]/i
   const logs: LogEntry[] = []
 
   const startDate = dateRange.startDate ? new Date(dateRange.startDate) : null
