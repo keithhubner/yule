@@ -311,6 +311,7 @@ async function analyzeZip(zipFile: ArrayBuffer): Promise<ArchiveAnalysis> {
 
       // Sample first 100 lines for date range and log entry estimation
       const lines = content.split('\n').slice(0, 100);
+      let sampleEntries = 0;
       for (const line of lines) {
         const dateMatch = line.match(datePattern);
         if (dateMatch) {
@@ -320,15 +321,15 @@ async function analyzeZip(zipFile: ArrayBuffer): Promise<ArchiveAnalysis> {
           }
         }
         if (logPattern.test(line)) {
-          estimatedLogEntries++;
+          sampleEntries++;
         }
       }
 
       // Estimate total log entries based on sample
       const totalLines = content.split('\n').length;
-      if (lines.length > 0) {
+      if (lines.length > 0 && sampleEntries > 0) {
         const ratio = totalLines / lines.length;
-        estimatedLogEntries = Math.floor(estimatedLogEntries * ratio);
+        estimatedLogEntries += Math.floor(sampleEntries * ratio);
       }
     }
   }
